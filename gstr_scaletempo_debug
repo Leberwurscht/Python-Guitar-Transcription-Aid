@@ -1,0 +1,2 @@
+#!/bin/sh
+GST_PLUGIN_PATH=./C/gst-scaletempo-rj/src/.libs/ gdb --args python gstr_scaletempo.py
