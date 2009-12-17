@@ -2,13 +2,14 @@
 <glade-interface>
   <!-- interface-requires gtk+ 2.16 -->
   <!-- interface-naming-policy project-wide -->
-  <widget class="GtkWindow" id="Transcribe">
+  <widget class="GtkWindow" id="mainwindow">
+    <signal name="destroy" handler="gtk_main_quit"/>
     <child>
-      <widget class="GtkVBox" id="vbox1">
+      <widget class="GtkVBox" id="vbox">
         <property name="visible">True</property>
         <property name="orientation">vertical</property>
         <child>
-          <widget class="GtkMenuBar" id="menubar1">
+          <widget class="GtkMenuBar" id="menubar">
             <property name="visible">True</property>
             <child>
               <widget class="GtkMenuItem" id="menuitem1">
@@ -61,6 +62,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <signal name="activate" handler="gtk_main_quit"/>
                       </widget>
                     </child>
                   </widget>
@@ -148,11 +150,25 @@
           <widget class="GtkToolbar" id="toolbar1">
             <property name="visible">True</property>
             <child>
-              <widget class="GtkToolButton" id="text">
+              <widget class="GtkToolButton" id="addtext">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Text hinzuf&#xFC;gen</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">insert-text</property>
+                <signal name="clicked" handler="insert_text"/>
+              </widget>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <widget class="GtkToolButton" id="play">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Abspielen</property>
+                <property name="use_underline">True</property>
+                <property name="stock_id">gtk-media-play</property>
+                <signal name="clicked" handler="play"/>
               </widget>
               <packing>
                 <property name="expand">False</property>
@@ -166,7 +182,7 @@
           </packing>
         </child>
         <child>
-          <widget class="GtkScrolledWindow" id="scrolledwindow1">
+          <widget class="GtkScrolledWindow" id="scrolledwindow">
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="hscrollbar_policy">automatic</property>
