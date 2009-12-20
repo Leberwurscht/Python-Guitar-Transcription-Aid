@@ -6,19 +6,34 @@ import gst
 import goocanvas
 import threading
 
+AUDIOFREQ=32000
+
 class Pipeline(gst.Pipeline):
 	def __init__(self,filename):
 		# creating the pipeline
 		gst.Pipeline.__init__(self,"mypipeline")
+		self.tempo=1.
 
 		# creating a gnlcomposition
 		self.comp = gst.element_factory_make("gnlcomposition", "mycomposition")
 		self.add(self.comp)
 		self.comp.connect("pad-added", self.OnPad)
 
+		# create spectrum
+		self.spectrum = gst.element_factory_make("spectrum", "spectrum")
+		self.spectrum.set_property("bands",1024)
+		self.add(self.spectrum)
+
+		# create caps
+		self.caps2 = gst.element_factory_make("capsfilter", "filter")
+		self.caps2.set_property("caps", gst.Caps("audio/x-raw-int", rate=AUDIOFREQ))
+		self.add(self.caps2)
+		self.spectrum.link(self.caps2)
+
 		# create scaletempo
 		self.scaletempo = gst.element_factory_make("scaletempo", "scaletempo")
 		self.add(self.scaletempo)
+		self.caps2.link(self.scaletempo)
 
 		# create an audioconvert
 		self.compconvert = gst.element_factory_make("audioconvert", "compconvert")
@@ -37,20 +52,54 @@ class Pipeline(gst.Pipeline):
 		# set the gnlfilesource properties
 		self.audio1.set_property("location", filename)
 		self.audio1.set_property("start", 0 * gst.SECOND)
-		self.audio1.set_property("duration", 6* gst.SECOND)
+		self.audio1.set_property("duration", 15* gst.SECOND)
 		self.audio1.set_property("media-start", 10 * gst.SECOND)
 		self.audio1.set_property("media-duration", 5 * gst.SECOND)
+
+		# spectrum
+		bus = self.get_bus()
+		bus.add_signal_watch()
+		bus.connect("message", self.on_message)
+
+	def on_message(self, bus, message):
+		s = message.structure
+
+		if s and s.get_name() == "spectrum":
+#			for i in s: print i
+			print s['magnitude']
+
 	def OnPad(self, comp, pad):
-		convpad = self.scaletempo.get_compatible_pad(pad, pad.get_caps())
+		convpad = self.spectrum.get_compatible_pad(pad, pad.get_caps())
 		pad.link(convpad)
 
-	def play(self,*args):
-		print args
+	def play(self,start,duration):
+		self.audio1.set_property("start", 0)
+		self.audio1.set_property("duration", int(duration/self.tempo * gst.SECOND))
+		self.audio1.set_property("media-start", int(start * gst.SECOND))
+		self.audio1.set_property("media-duration", int(duration * gst.SECOND))
+
+		print "start",0
+		print "duration",int(duration/self.tempo * gst.SECOND)
+		print "media-start", int(start * gst.SECOND)
+		print "media-duration", int(duration * gst.SECOND)
+		
 		self.set_state(gst.STATE_PLAYING)
 
-class Timeline(goocanvas.Canvas):
-	def __init__(self, seconds):
+	def stop(self,*args):
+		self.set_state(gst.STATE_NULL)
+
+	def set_tempo(self,widget):
+		self.tempo=widget.get_value() / 100.
+
+class Fretboard(goocanvas.Canvas):
+	def __init__(self):
 		goocanvas.Canvas.__init__(self)
+
+class Timeline(goocanvas.Canvas):
+	def __init__(self, seconds, pl):
+		goocanvas.Canvas.__init__(self)
+
+		self.pl=pl
 
 		self.mode = None
 		self.dragging=False
@@ -69,6 +118,7 @@ class Timeline(goocanvas.Canvas):
 		self.timeline = goocanvas.Group(parent=self.root)
 		self.timerect = goocanvas.Rect(parent=self.timeline,width=40,height=self.length,fill_color="blue")
 		self.marker = goocanvas.Rect(parent=self.timeline,width=40,height=10,visibility=goocanvas.ITEM_INVISIBLE, fill_color_rgba=0xaa000044)
+		self.marker.props.pointer_events = 0
 		self.timerect.connect("motion_notify_event", self.timerect_on_motion_notify)
         	self.timerect.connect("button_press_event", self.timerect_on_button_press)
 		self.timerect.connect("button_release_event", self.timerect_on_button_release)
@@ -87,6 +137,8 @@ class Timeline(goocanvas.Canvas):
 
 	def timerect_on_motion_notify (self, item, target, event):
 		if (self.dragging == True) and (event.state & gtk.gdk.BUTTON1_MASK):
+			if self.drag_y<0:
+				self.marker.props.y=0
 			if event.y>self.drag_y:
 				self.marker.props.y=self.drag_y
 				self.marker.props.height=event.y-self.drag_y
@@ -151,17 +203,18 @@ class Timeline(goocanvas.Canvas):
 
 	def insert_text(self,*args):
 		self.mode="text"
-
+	def play(self,*args):
+		self.pl.play(self.marker.props.y/50.,self.marker.props.height/50.)
 
 if __name__=="__main__":
-	glade = gtk.glade.XML("transcribe.glade", "mainwindow")
+	glade = gtk.glade.XML("gui.glade", "mainwindow")
 	glade.get_widget("mainwindow").show_all()
 
 	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg")
 
-	tl = Timeline(200)
+	tl = Timeline(200,pl)
 	glade.get_widget("scrolledwindow").add(tl)
 	tl.show_all()
 
-	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':pl.play})
+	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':tl.play, 'stop':pl.stop, 'set_tempo':pl.set_tempo})
 	gtk.main()
