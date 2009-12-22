@@ -3,47 +3,64 @@
 import gtk
 import gtk.glade
 import gst
+import math
 import goocanvas
 import threading
 
 AUDIOFREQ=32000
+BANDS=512
+
+strings={6:82.4069, 5:110.000, 4:146.832, 3:195.998, 2:246.942, 1:329.628}
+
+freq = [((AUDIOFREQ / 2.) * i + AUDIOFREQ / 4.) / BANDS for i in xrange(BANDS)]
+l = len(freq)
+
+halftone0 = 82.4069
+
+def freq2halftone(f):
+	return 12.*math.log(f/strings[6])/math.log(2)
+
+halftones = [freq2halftone(f) for f in freq]
 
 class Pipeline(gst.Pipeline):
-	def __init__(self,filename):
+	def __init__(self,filename, fretboard):
 		# creating the pipeline
 		gst.Pipeline.__init__(self,"mypipeline")
 		self.tempo=1.
+		self.fretboard=fretboard
+		self.mags=[0 for i in xrange(l)]
 
 		# creating a gnlcomposition
 		self.comp = gst.element_factory_make("gnlcomposition", "mycomposition")
 		self.add(self.comp)
 		self.comp.connect("pad-added", self.OnPad)
 
-		# create spectrum
-		self.spectrum = gst.element_factory_make("spectrum", "spectrum")
-		self.spectrum.set_property("bands",1024)
-		self.add(self.spectrum)
-
-		# create caps
-		self.caps2 = gst.element_factory_make("capsfilter", "filter")
-		self.caps2.set_property("caps", gst.Caps("audio/x-raw-int", rate=AUDIOFREQ))
-		self.add(self.caps2)
-		self.spectrum.link(self.caps2)
-
 		# create scaletempo
 		self.scaletempo = gst.element_factory_make("scaletempo", "scaletempo")
 		self.add(self.scaletempo)
-		self.caps2.link(self.scaletempo)
+#		self.caps2.link(self.scaletempo)
 
 		# create an audioconvert
 		self.compconvert = gst.element_factory_make("audioconvert", "compconvert")
 		self.add(self.compconvert)
 		self.scaletempo.link(self.compconvert)
 
+		# create spectrum
+		self.spectrum = gst.element_factory_make("spectrum", "spectrum")
+		self.spectrum.set_property("bands",1024)
+		self.add(self.spectrum)
+		self.compconvert.link(self.spectrum)
+
+		# create caps
+		self.caps = gst.element_factory_make("capsfilter", "filter")
+		self.caps.set_property("caps", gst.Caps("audio/x-raw-int", rate=AUDIOFREQ))
+		self.add(self.caps)
+		self.spectrum.link(self.caps)
+
 		# create an alsasink
 		self.sink = gst.element_factory_make("alsasink", "alsasink")
 		self.add(self.sink)
-		self.compconvert.link(self.sink)
+		self.caps.link(self.sink)
 		
 		# create a gnlfilesource
 		self.audio1 = gst.element_factory_make("gnlfilesource", "audio1")
@@ -65,11 +82,15 @@ class Pipeline(gst.Pipeline):
 		s = message.structure
 
 		if s and s.get_name() == "spectrum":
-#			for i in s: print i
-			print s['magnitude']
+			self.mags=s['magnitude']
+
+			alloc = self.fretboard.get_allocation()
+			rect = gtk.gdk.Rectangle (0, 0, alloc.width, alloc.height )
+			self.fretboard.window.invalidate_rect(rect, True)
+		return True
 
 	def OnPad(self, comp, pad):
-		convpad = self.spectrum.get_compatible_pad(pad, pad.get_caps())
+		convpad = self.scaletempo.get_compatible_pad(pad, pad.get_caps())
 		pad.link(convpad)
 
 	def play(self,start,duration):
@@ -78,10 +99,10 @@ class Pipeline(gst.Pipeline):
 		self.audio1.set_property("media-start", int(start * gst.SECOND))
 		self.audio1.set_property("media-duration", int(duration * gst.SECOND))
 
-		print "start",0
-		print "duration",int(duration/self.tempo * gst.SECOND)
-		print "media-start", int(start * gst.SECOND)
-		print "media-duration", int(duration * gst.SECOND)
+#		print "start",0
+#		print "duration",int(duration/self.tempo * gst.SECOND)
+#		print "media-start", int(start * gst.SECOND)
+#		print "media-duration", int(duration * gst.SECOND)
 		
 		self.set_state(gst.STATE_PLAYING)
 
@@ -91,9 +112,45 @@ class Pipeline(gst.Pipeline):
 	def set_tempo(self,widget):
 		self.tempo=widget.get_value() / 100.
 
-class Fretboard(goocanvas.Canvas):
-	def __init__(self):
-		goocanvas.Canvas.__init__(self)
+	def draw_fretboard(self,*args):
+		context = self.fretboard.window.cairo_create()
+		self.draw(context)
+		return False
+
+	def draw(self,context):
+		rect = self.fretboard.get_allocation()
+
+		startposx = 10
+		startposy = 10
+
+		height = 20
+		width = 30
+
+		for f,saite in strings.iteritems():
+			linear = cairo.LinearGradient(0.25, 0, 0.75, 0)
+
+		for i in xrange(l):
+#			print self.mags[i]
+		        context.set_source_rgb(0, 0, 0)
+			context.move_to( int(1.*i/l*rect.width) , 0 + 100 )
+			context.line_to( int(1.*i/l*rect.width) , int(self.mags[i] +100) )
+#			context.line_to( int(1.*i/l*rect.width) , 30 + 60)
+			context.stroke()
+
+#class Fretboard(gtk.DrawingArea):
+#	def __init__(self):
+#		gtk.DrawingArea.__init__(self)
+#		self.connect("expose_event", self.expose)
+#	def expose(self, widget, event):
+#		self.context = widget.window.cairo_create()
+#		self.context.rectangle(event.area.x, event.area.y, event.area.width, event.area.height)
+#		self.context.clip()
+#		self.draw(self.context)
+#		return False
+#
+#	def draw(self, context):
+#		rect = self.get_allocation()
+		
 
 class Timeline(goocanvas.Canvas):
 	def __init__(self, seconds, pl):
@@ -209,12 +266,15 @@ class Timeline(goocanvas.Canvas):
 if __name__=="__main__":
 	glade = gtk.glade.XML("gui.glade", "mainwindow")
 	glade.get_widget("mainwindow").show_all()
+	fretboard=glade.get_widget("fretboard")
 
-	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg")
+	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg",fretboard)
 
 	tl = Timeline(200,pl)
 	glade.get_widget("scrolledwindow").add(tl)
 	tl.show_all()
 
-	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':tl.play, 'stop':pl.stop, 'set_tempo':pl.set_tempo})
+	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':tl.play, 'stop':pl.stop, 'set_tempo':pl.set_tempo, 'fretboard_expose':pl.draw_fretboard})
+
+#	gobject.timeout_add( 50, pl.tick )
 	gtk.main()
