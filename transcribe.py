@@ -4,23 +4,29 @@ import gtk
 import gtk.glade
 import gst
 import math
+import cairo
 import goocanvas
 import threading
 
 AUDIOFREQ=32000
-BANDS=512
-
-strings={6:82.4069, 5:110.000, 4:146.832, 3:195.998, 2:246.942, 1:329.628}
+BANDS=4096
 
 freq = [((AUDIOFREQ / 2.) * i + AUDIOFREQ / 4.) / BANDS for i in xrange(BANDS)]
 l = len(freq)
 
 halftone0 = 82.4069
 
+mag_min=-60
+mag_max=-20
+
 def freq2halftone(f):
-	return 12.*math.log(f/strings[6])/math.log(2)
+	return 12.*math.log(f/halftone0)/math.log(2)
 
 halftones = [freq2halftone(f) for f in freq]
+
+strings={6:0, 5:5, 4:10, 3:15, 2:19, 1:24}
+
+max_halftone=strings[1]+20
 
 class Pipeline(gst.Pipeline):
 	def __init__(self,filename, fretboard):
@@ -38,7 +44,6 @@ class Pipeline(gst.Pipeline):
 		# create scaletempo
 		self.scaletempo = gst.element_factory_make("scaletempo", "scaletempo")
 		self.add(self.scaletempo)
-#		self.caps2.link(self.scaletempo)
 
 		# create an audioconvert
 		self.compconvert = gst.element_factory_make("audioconvert", "compconvert")
@@ -47,7 +52,7 @@ class Pipeline(gst.Pipeline):
 
 		# create spectrum
 		self.spectrum = gst.element_factory_make("spectrum", "spectrum")
-		self.spectrum.set_property("bands",1024)
+		self.spectrum.set_property("bands",BANDS)
 		self.add(self.spectrum)
 		self.compconvert.link(self.spectrum)
 
@@ -98,11 +103,6 @@ class Pipeline(gst.Pipeline):
 		self.audio1.set_property("duration", int(duration/self.tempo * gst.SECOND))
 		self.audio1.set_property("media-start", int(start * gst.SECOND))
 		self.audio1.set_property("media-duration", int(duration * gst.SECOND))
-
-#		print "start",0
-#		print "duration",int(duration/self.tempo * gst.SECOND)
-#		print "media-start", int(start * gst.SECOND)
-#		print "media-duration", int(duration * gst.SECOND)
 		
 		self.set_state(gst.STATE_PLAYING)
 
@@ -126,16 +126,39 @@ class Pipeline(gst.Pipeline):
 		height = 20
 		width = 30
 
-		for f,saite in strings.iteritems():
-			linear = cairo.LinearGradient(0.25, 0, 0.75, 0)
+		linear = cairo.LinearGradient( halftones[0]*width , 0, halftones[-1]*width, 0)
+
+		div = halftones[-1]-halftones[0]
 
 		for i in xrange(l):
-#			print self.mags[i]
-		        context.set_source_rgb(0, 0, 0)
-			context.move_to( int(1.*i/l*rect.width) , 0 + 100 )
-			context.line_to( int(1.*i/l*rect.width) , int(self.mags[i] +100) )
-#			context.line_to( int(1.*i/l*rect.width) , 30 + 60)
-			context.stroke()
+			if halftones[i]<-5 or halftones[i]>max_halftone: continue
+
+			level = ( 1.*self.mags[i]-mag_min ) / (mag_max-mag_min)
+			level = max(0.,level)
+			level = min(1.,level)
+
+			level = 1.-level
+
+			linear.add_color_stop_rgb( ( halftones[i]-halftones[0] ) / div, level,level,level)
+
+			## for resolution test
+			#if i%2==0:
+			#	linear.add_color_stop_rgb( ( halftones[i]-halftones[0] ) / div, 1,1,1)
+			#else:
+			#	linear.add_color_stop_rgb( ( halftones[i]-halftones[0] ) / div, 0,0,0)
+				
+		matrix = linear.get_matrix()
+
+		for string,halftone in strings.iteritems():
+			matrix_copy = cairo.Matrix() * matrix
+			matrix_copy.translate(width*halftone+width/2.,0)
+			
+			linear.set_matrix(matrix_copy)
+			
+			for fret in xrange(13):
+				context.rectangle(startposx+fret*width, startposy+height*(string-1), width-5, height-5)
+				context.set_source(linear)
+				context.fill()
 
 #class Fretboard(gtk.DrawingArea):
 #	def __init__(self):
@@ -185,7 +208,6 @@ class Timeline(goocanvas.Canvas):
 
 		self.space = goocanvas.Group(parent=self.root)
 		self.space.translate(50,0)
-#		self.spacerect = goocanvas.Rect(parent=self.space,width=350,height=self.length)
 
 	def enable_dragging(self,item):
 		item.connect("motion_notify_event", self.on_motion_notify)
@@ -268,7 +290,9 @@ if __name__=="__main__":
 	glade.get_widget("mainwindow").show_all()
 	fretboard=glade.get_widget("fretboard")
 
-	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg",fretboard)
+#	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg",fretboard)
+	pl = Pipeline("/home/maxi/test/once/alle.wav",fretboard)
+#	pl = Pipeline("/home/maxi/Musik/ogg/RicardoV1980 - (none) - Probando camara (bulerias) (2008).ogg",fretboard)
 
 	tl = Timeline(200,pl)
 	glade.get_widget("scrolledwindow").add(tl)
@@ -276,5 +300,4 @@ if __name__=="__main__":
 
 	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':tl.play, 'stop':pl.stop, 'set_tempo':pl.set_tempo, 'fretboard_expose':pl.draw_fretboard})
 
-#	gobject.timeout_add( 50, pl.tick )
 	gtk.main()
