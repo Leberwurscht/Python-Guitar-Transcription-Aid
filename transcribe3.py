@@ -8,8 +8,11 @@ import cairo
 import goocanvas
 import threading
 
+AUDIOFREQ=32000
 BANDS=4096
 
+freq = [((AUDIOFREQ / 2.) * i + AUDIOFREQ / 4.) / BANDS for i in xrange(BANDS)]
+l = len(freq)
 
 halftone0 = 82.4069
 
@@ -19,6 +22,7 @@ mag_max=-20
 def freq2halftone(f):
 	return 12.*math.log(f/halftone0)/math.log(2)
 
+halftones = [freq2halftone(f) for f in freq]
 
 strings={6:0, 5:5, 4:10, 3:15, 2:19, 1:24}
 
@@ -30,40 +34,27 @@ class Pipeline(gst.Pipeline):
 		gst.Pipeline.__init__(self,"mypipeline")
 		self.tempo=1.
 		self.fretboard=fretboard
-		self.mags=[0 for i in xrange(BANDS)]
-		self.halftones=[i for i in xrange(BANDS)]
+		self.mags=[0 for i in xrange(l)]
 
 		# creating a gnlcomposition
 		self.comp = gst.element_factory_make("gnlcomposition", "mycomposition")
 		self.add(self.comp)
 		self.comp.connect("pad-added", self.OnPad)
 
-		# create scaletempo
-		self.scaletempo = gst.element_factory_make("scaletempo", "scaletempo")
-		self.add(self.scaletempo)
-
 		# create an audioconvert
 		self.compconvert = gst.element_factory_make("audioconvert", "compconvert")
 		self.add(self.compconvert)
-		self.scaletempo.link(self.compconvert)
-
-		# create spectrum
-		self.spectrum = gst.element_factory_make("spectrum", "spectrum")
-		self.spectrum.set_property("bands",BANDS)
-		self.add(self.spectrum)
-		self.compconvert.link(self.spectrum)
 
 		# create caps
-#		self.caps = gst.element_factory_make("capsfilter", "filter")
-#		self.caps.set_property("caps", gst.Caps("audio/x-raw-int, rate=%d" % AUDIOFREQ))
-#		self.add(self.caps)
-#		self.spectrum.link(self.caps)
+		self.caps = gst.element_factory_make("capsfilter", "filter")
+		self.caps.set_property("caps", gst.Caps("audio/x-raw-int, rate=%d" % AUDIOFREQ))
+		self.add(self.caps)
+		self.compconvert.link(self.caps)
 
 		# create an alsasink
 		self.sink = gst.element_factory_make("alsasink", "alsasink")
 		self.add(self.sink)
-		self.spectrum.link(self.sink)
-	
+		self.caps.link(self.sink)
 
 		# create a gnlfilesource
 		self.audio1 = gst.element_factory_make("gnlfilesource", "audio1")
@@ -75,23 +66,6 @@ class Pipeline(gst.Pipeline):
 		self.audio1.set_property("duration", 15* gst.SECOND)
 		self.audio1.set_property("media-start", 10 * gst.SECOND)
 		self.audio1.set_property("media-duration", 5 * gst.SECOND)
-
-		###
-#		print self.comp.get_pad("sink").get_caps()
-#		print self.scaletempo.get_pad("src").get_caps()
-#		print self.scaletempo.get_pad("sink").get_caps()
-#		print self.compconvert.get_pad("src").get_caps()
-#		print self.compconvert.get_pad("sink").get_caps()
-#		print self.spectrum.get_pad("src").get_caps()
-#		print self.spectrum.get_pad("sink").get_caps()
-#		print self.caps.get_pad("src").get_caps()
-#		print self.caps.get_pad("sink").get_caps()
-#		print self.sink.get_pad("src").get_caps()
-
-		# spectrum
-		bus = self.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
 
 	def on_message(self, bus, message):
 		s = message.structure
@@ -105,10 +79,11 @@ class Pipeline(gst.Pipeline):
 		return True
 
 	def OnPad(self, comp, pad):
-		convpad = self.scaletempo.get_compatible_pad(pad, pad.get_caps())
-		self.AUDIOFREQ=pad.get_caps()[0]["rate"]
-		self.freq = [((self.AUDIOFREQ / 2.) * i + self.AUDIOFREQ / 4.) / BANDS for i in xrange(BANDS)]
-		self.halftones = [freq2halftone(f) for f in self.freq]
+		convpad = self.compconvert.get_compatible_pad(pad, pad.get_caps())
+		print "====>audioconvert:"
+		print convpad.get_caps()
+		print "====>composition:"
+		print pad.get_caps()
 		pad.link(convpad)
 
 	def play(self,start,duration):
@@ -139,12 +114,12 @@ class Pipeline(gst.Pipeline):
 		height = 20
 		width = 30
 
-		linear = cairo.LinearGradient( self.halftones[0]*width , 0, self.halftones[-1]*width, 0)
+		linear = cairo.LinearGradient( halftones[0]*width , 0, halftones[-1]*width, 0)
 
-		div = self.halftones[-1]-self.halftones[0]
+		div = halftones[-1]-halftones[0]
 
-		for i in xrange(BANDS):
-			if self.halftones[i]<-5 or self.halftones[i]>max_halftone: continue
+		for i in xrange(l):
+			if halftones[i]<-5 or halftones[i]>max_halftone: continue
 
 			level = ( 1.*self.mags[i]-mag_min ) / (mag_max-mag_min)
 			level = max(0.,level)
@@ -152,7 +127,7 @@ class Pipeline(gst.Pipeline):
 
 			level = 1.-level
 
-			linear.add_color_stop_rgb( ( self.halftones[i]-self.halftones[0] ) / div, level,level,level)
+			linear.add_color_stop_rgb( ( halftones[i]-halftones[0] ) / div, level,level,level)
 
 			## for resolution test
 			#if i%2==0:
@@ -164,7 +139,7 @@ class Pipeline(gst.Pipeline):
 
 		for string,halftone in strings.iteritems():
 			matrix_copy = cairo.Matrix() * matrix
-			matrix_copy.translate(width*halftone - width/2.,0)
+			matrix_copy.translate(width*halftone+width/2.,0)
 			
 			linear.set_matrix(matrix_copy)
 			
