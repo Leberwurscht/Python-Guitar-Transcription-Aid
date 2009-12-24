@@ -76,18 +76,6 @@ class Pipeline(gst.Pipeline):
 		self.audio1.set_property("media-start", 10 * gst.SECOND)
 		self.audio1.set_property("media-duration", 5 * gst.SECOND)
 
-		###
-#		print self.comp.get_pad("sink").get_caps()
-#		print self.scaletempo.get_pad("src").get_caps()
-#		print self.scaletempo.get_pad("sink").get_caps()
-#		print self.compconvert.get_pad("src").get_caps()
-#		print self.compconvert.get_pad("sink").get_caps()
-#		print self.spectrum.get_pad("src").get_caps()
-#		print self.spectrum.get_pad("sink").get_caps()
-#		print self.caps.get_pad("src").get_caps()
-#		print self.caps.get_pad("sink").get_caps()
-#		print self.sink.get_pad("src").get_caps()
-
 		# spectrum
 		bus = self.get_bus()
 		bus.add_signal_watch()
@@ -116,7 +104,7 @@ class Pipeline(gst.Pipeline):
 		self.audio1.set_property("duration", int(duration/self.tempo * gst.SECOND))
 		self.audio1.set_property("media-start", int(start * gst.SECOND))
 		self.audio1.set_property("media-duration", int(duration * gst.SECOND))
-		
+		print start,duration
 		self.set_state(gst.STATE_PLAYING)
 
 	def stop(self,*args):
@@ -156,9 +144,9 @@ class Pipeline(gst.Pipeline):
 
 			## for resolution test
 			#if i%2==0:
-			#	linear.add_color_stop_rgb( ( halftones[i]-halftones[0] ) / div, 1,1,1)
+			#	linear.add_color_stop_rgb( ( self.halftones[i]-self.halftones[0] ) / div, 1,1,1)
 			#else:
-			#	linear.add_color_stop_rgb( ( halftones[i]-halftones[0] ) / div, 0,0,0)
+			#	linear.add_color_stop_rgb( ( self.halftones[i]-self.halftones[0] ) / div, 0,0,0)
 				
 		matrix = linear.get_matrix()
 
@@ -172,6 +160,12 @@ class Pipeline(gst.Pipeline):
 				context.rectangle(startposx+fret*width, startposy+height*(string-1), width-5, height-5)
 				context.set_source(linear)
 				context.fill()
+
+		context.set_source_rgb (.8,0,0)
+		context.set_line_width(8)
+		context.move_to(startposx+width/2-4,startposy-5)
+		context.line_to(startposx+width/2-4,startposy+height*len(strings)+5)
+		context.stroke()
 
 #class Fretboard(gtk.DrawingArea):
 #	def __init__(self):
