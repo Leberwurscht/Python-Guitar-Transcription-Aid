@@ -2,20 +2,40 @@
 
 import gst, gobject
 
-BANDS=4096
-AUDIOFREQ=32000
+import Visualizer
 
-bin = gst.Pipeline("bin")
+pipeline = gst.Pipeline()
 
-src = gst.element_factory_make("audiotestsrc", "src")
+src = gst.element_factory_make("filesrc")
+src.set_property("location", "/home/maxi/Musik/ogg/jamendo_track_401871.ogg")
+pipeline.add(src)
 
-audioconvert = gst.element_factory_make("audioconvert")
+def on_decoded_pad(bin, pad, *args):
+	global convert
+	convertpad=convert.get_compatible_pad(pad)
+	pad.link(convertpad)
 
-spectrum = gst.element_factory_make("spectrum","spectrum")
-spectrum.set_property("bands",BANDS)
+decode = gst.element_factory_make("decodebin")
+decode.connect("new-decoded-pad", on_decoded_pad)
+pipeline.add(decode)
+src.link(decode)
 
-sink = gst.element_factory_make("alsasink","sink")
+convert = gst.element_factory_make("audioconvert")
+pipeline.add(convert)
 
-caps = gst.Caps("audio/x-raw-int",rate=AUDIOFREQ)
+#fretboard = gst.element_factory_make("spectrum")
+fretboard = Visualizer.Base(pipeline.get_bus())
+pipeline.add(fretboard)
+convert.link(fretboard)
 
+#sink = gst.element_factory_make("gconfaudiosink")
+sink = gst.element_factory_make("alsasink")
+pipeline.add(sink)
+fretboard.link(sink)
 
+pipeline.set_state(gst.STATE_PLAYING)
+
+print pipeline.get_bus()
+
+mainloop = gobject.MainLoop()
+mainloop.run()

@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
+import gst
 
-
-class FretboardBase(gst.Bin):
+class Base(gst.Bin):
 	def __init__(self):
-		pass
-
-
+		gst.Bin.__init__(self):
+			
