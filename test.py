@@ -2,7 +2,7 @@
 
 import gst, gobject
 
-import Visualizer
+import Visualizer, gtk
 
 pipeline = gst.Pipeline()
 
@@ -23,19 +23,22 @@ src.link(decode)
 convert = gst.element_factory_make("audioconvert")
 pipeline.add(convert)
 
-#fretboard = gst.element_factory_make("spectrum")
-fretboard = Visualizer.Base(pipeline.get_bus())
+fretboard = gst.element_factory_make("spectrum")
+fretboard.set_property("bands",4096)
 pipeline.add(fretboard)
 convert.link(fretboard)
 
-#sink = gst.element_factory_make("gconfaudiosink")
 sink = gst.element_factory_make("alsasink")
 pipeline.add(sink)
 fretboard.link(sink)
 
+test = Visualizer.Fretboard(pipeline.get_bus())
+w = gtk.Window()
+w.add(test)
+w.show_all()
+
 pipeline.set_state(gst.STATE_PLAYING)
 
-print pipeline.get_bus()
 
 mainloop = gobject.MainLoop()
 mainloop.run()
