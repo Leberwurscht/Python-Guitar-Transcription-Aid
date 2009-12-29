@@ -2,185 +2,12 @@
 
 import gtk
 import gtk.glade
-import gst
+import gst, gobject
 import math
-import cairo
 import goocanvas
-import threading
 
-BANDS=4096
-
-
-halftone0 = 82.4069
-
-mag_min=-60
-mag_max=-20
-
-def freq2halftone(f):
-	return 12.*math.log(f/halftone0)/math.log(2)
-
-
-strings={6:0, 5:5, 4:10, 3:15, 2:19, 1:24}
-
-max_halftone=strings[1]+20
-
-class Pipeline(gst.Pipeline):
-	def __init__(self,filename, fretboard):
-		# creating the pipeline
-		gst.Pipeline.__init__(self,"mypipeline")
-		self.tempo=1.
-		self.fretboard=fretboard
-		self.mags=[0 for i in xrange(BANDS)]
-		self.halftones=[i for i in xrange(BANDS)]
-
-		# creating a gnlcomposition
-		self.comp = gst.element_factory_make("gnlcomposition", "mycomposition")
-		self.add(self.comp)
-		self.comp.connect("pad-added", self.OnPad)
-
-		# create scaletempo
-		self.scaletempo = gst.element_factory_make("scaletempo", "scaletempo")
-		self.add(self.scaletempo)
-
-		# create an audioconvert
-		self.compconvert = gst.element_factory_make("audioconvert", "compconvert")
-		self.add(self.compconvert)
-		self.scaletempo.link(self.compconvert)
-
-		# create spectrum
-		self.spectrum = gst.element_factory_make("spectrum", "spectrum")
-		self.spectrum.set_property("bands",BANDS)
-		self.add(self.spectrum)
-		self.compconvert.link(self.spectrum)
-
-		# create caps
-#		self.caps = gst.element_factory_make("capsfilter", "filter")
-#		self.caps.set_property("caps", gst.Caps("audio/x-raw-int, rate=%d" % AUDIOFREQ))
-#		self.add(self.caps)
-#		self.spectrum.link(self.caps)
-
-		# create an alsasink
-		self.sink = gst.element_factory_make("alsasink", "alsasink")
-		self.add(self.sink)
-		self.spectrum.link(self.sink)
-	
-
-		# create a gnlfilesource
-		self.audio1 = gst.element_factory_make("gnlfilesource", "audio1")
-		self.comp.add(self.audio1)
-
-		# set the gnlfilesource properties
-		self.audio1.set_property("location", filename)
-		self.audio1.set_property("start", 0 * gst.SECOND)
-		self.audio1.set_property("duration", 15* gst.SECOND)
-		self.audio1.set_property("media-start", 10 * gst.SECOND)
-		self.audio1.set_property("media-duration", 5 * gst.SECOND)
-
-		# spectrum
-		bus = self.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
-	def on_message(self, bus, message):
-		s = message.structure
-
-		if s and s.get_name() == "spectrum":
-			self.mags=s['magnitude']
-
-			alloc = self.fretboard.get_allocation()
-			rect = gtk.gdk.Rectangle (0, 0, alloc.width, alloc.height )
-			self.fretboard.window.invalidate_rect(rect, True)
-		return True
-
-	def OnPad(self, comp, pad):
-		convpad = self.scaletempo.get_compatible_pad(pad, pad.get_caps())
-		self.AUDIOFREQ=pad.get_caps()[0]["rate"]
-		self.freq = [((self.AUDIOFREQ / 2.) * i + self.AUDIOFREQ / 4.) / BANDS for i in xrange(BANDS)]
-		self.halftones = [freq2halftone(f) for f in self.freq]
-		pad.link(convpad)
-
-	def play(self,start,duration):
-		self.audio1.set_property("start", 0)
-		self.audio1.set_property("duration", int(duration/self.tempo * gst.SECOND))
-		self.audio1.set_property("media-start", int(start * gst.SECOND))
-		self.audio1.set_property("media-duration", int(duration * gst.SECOND))
-		print start,duration
-		self.set_state(gst.STATE_PLAYING)
-
-	def stop(self,*args):
-		self.set_state(gst.STATE_NULL)
-
-	def set_tempo(self,widget):
-		self.tempo=widget.get_value() / 100.
-
-	def draw_fretboard(self,*args):
-		context = self.fretboard.window.cairo_create()
-		self.draw(context)
-		return False
-
-	def draw(self,context):
-		rect = self.fretboard.get_allocation()
-
-		startposx = 10
-		startposy = 10
-
-		height = 20
-		width = 30
-
-		linear = cairo.LinearGradient( self.halftones[0]*width , 0, self.halftones[-1]*width, 0)
-
-		div = self.halftones[-1]-self.halftones[0]
-
-		for i in xrange(BANDS):
-			if self.halftones[i]<-5 or self.halftones[i]>max_halftone: continue
-
-			level = ( 1.*self.mags[i]-mag_min ) / (mag_max-mag_min)
-			level = max(0.,level)
-			level = min(1.,level)
-
-			level = 1.-level
-
-			linear.add_color_stop_rgb( ( self.halftones[i]-self.halftones[0] ) / div, level,level,level)
-
-			## for resolution test
-			#if i%2==0:
-			#	linear.add_color_stop_rgb( ( self.halftones[i]-self.halftones[0] ) / div, 1,1,1)
-			#else:
-			#	linear.add_color_stop_rgb( ( self.halftones[i]-self.halftones[0] ) / div, 0,0,0)
-				
-		matrix = linear.get_matrix()
-
-		for string,halftone in strings.iteritems():
-			matrix_copy = cairo.Matrix() * matrix
-			matrix_copy.translate(width*halftone - width/2.,0)
-			
-			linear.set_matrix(matrix_copy)
-			
-			for fret in xrange(13):
-				context.rectangle(startposx+fret*width, startposy+height*(string-1), width-5, height-5)
-				context.set_source(linear)
-				context.fill()
-
-		context.set_source_rgb (.8,0,0)
-		context.set_line_width(8)
-		context.move_to(startposx+width/2-4,startposy-5)
-		context.line_to(startposx+width/2-4,startposy+height*len(strings)+5)
-		context.stroke()
-
-#class Fretboard(gtk.DrawingArea):
-#	def __init__(self):
-#		gtk.DrawingArea.__init__(self)
-#		self.connect("expose_event", self.expose)
-#	def expose(self, widget, event):
-#		self.context = widget.window.cairo_create()
-#		self.context.rectangle(event.area.x, event.area.y, event.area.width, event.area.height)
-#		self.context.clip()
-#		self.draw(self.context)
-#		return False
-#
-#	def draw(self, context):
-#		rect = self.get_allocation()
-		
+import Visualizer
+import Pipeline
 
 class Timeline(goocanvas.Canvas):
 	def __init__(self, seconds, pl):
@@ -295,16 +122,27 @@ class Timeline(goocanvas.Canvas):
 if __name__=="__main__":
 	glade = gtk.glade.XML("gui.glade", "mainwindow")
 	glade.get_widget("mainwindow").show_all()
-	fretboard=glade.get_widget("fretboard")
+	vbox=glade.get_widget("vbox")
 
-#	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg",fretboard)
-	pl = Pipeline("/home/maxi/test/once/alle.wav",fretboard)
-#	pl = Pipeline("/home/maxi/Musik/ogg/RicardoV1980 - (none) - Probando camara (bulerias) (2008).ogg",fretboard)
+	pl = Pipeline.Pipeline("/home/maxi/Musik/ogg/jamendo_track_401871.ogg")
+#	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg")
+#	pl = Pipeline("/home/maxi/test/once/alle.wav")
+#	pl = Pipeline("/home/maxi/Musik/ogg/RicardoV1980 - (none) - Probando camara (bulerias) (2008).ogg")
 
-	tl = Timeline(200,pl)
-	glade.get_widget("scrolledwindow").add(tl)
-	tl.show_all()
+	fretboard = Visualizer.Fretboard(pl.get_bus())
+	vbox.pack_start(fretboard,expand=False)
+	fretboard.show_all()
 
-	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':tl.play, 'stop':pl.stop, 'set_tempo':pl.set_tempo, 'fretboard_expose':pl.draw_fretboard})
+#	pl.play(0.5,0,1)
+#	tl = Timeline(200,pl)
+#	glade.get_widget("scrolledwindow").add(tl)
+#	tl.show_all()
+
+	def play(*args):
+		print args
+		pl.play(0.5)
+
+	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit, 'play':play, 'stop':pl.stop})
+#	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':pl.play, 'stop':pl.stop, 'set_tempo':pl.set_tempo, 'fretboard_expose':pl.draw_fretboard})
 
 	gtk.main()

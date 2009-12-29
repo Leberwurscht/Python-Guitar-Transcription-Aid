@@ -245,17 +245,6 @@
             <property name="position">3</property>
           </packing>
         </child>
-        <child>
-          <widget class="GtkDrawingArea" id="fretboard">
-            <property name="height_request">200</property>
-            <property name="visible">True</property>
-            <signal name="expose_event" handler="fretboard_expose"/>
-          </widget>
-          <packing>
-            <property name="expand">False</property>
-            <property name="position">4</property>
-          </packing>
-        </child>
       </widget>
     </child>
   </widget>
