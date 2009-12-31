@@ -2,147 +2,56 @@
 
 import gtk
 import gtk.glade
-import gst, gobject
-import math
-import goocanvas
 
 import Visualizer
 import Pipeline
+import Timeline
 
-class Timeline(goocanvas.Canvas):
-	def __init__(self, seconds, pl):
-		goocanvas.Canvas.__init__(self)
+class Transcribe:
+	def __init__(self):
+		# create gui
+		glade = gtk.glade.XML("gui.glade", "mainwindow")
+		glade.get_widget("mainwindow").show_all()
+		vbox=glade.get_widget("vbox")
 
-		self.pl=pl
+		# create pipeline
+		self.pipeline = Pipeline.Pipeline("/home/maxi/Musik/ogg/jamendo_track_401871.ogg")
 
-		self.mode = None
-		self.dragging=False
+		# create timeline
+		self.timeline = Timeline.Timeline(self.pipeline.duration)
+		glade.get_widget("scrolledwindow").add(self.timeline)
+		self.timeline.show_all()
 
-		### Setup canvas ###
-		self.seconds = seconds
-		self.length = seconds*50
+		# create fretboard
+		self.fretboard = Visualizer.Fretboard(self.pipeline.get_bus())
+		vbox.pack_start(self.fretboard,expand=False)
+		self.fretboard.show_all()
 
-		self.set_bounds(0,0,400,self.length)
-		self.connect("button_release_event",self.canvas_button_release)
+		# connect signals
+		glade.signal_autoconnect({
+			'gtk_main_quit':gtk.main_quit,
+			'insert_text':self.insert_text,
+			'play':self.play,
+			'stop':self.stop,
+			'set_tempo':self.set_tempo
+		})
 
-		self.root = self.get_root_item()
+	def insert_text(self,widget):
+		self.timeline.mode="insert_text"
 
-		### Create Timeline + Space for elements ###
+	def play(self,widget):
+		marker = self.timeline.get_marker()
 
-		self.timeline = goocanvas.Group(parent=self.root)
-		self.timerect = goocanvas.Rect(parent=self.timeline,width=40,height=self.length,fill_color="blue")
-		self.marker = goocanvas.Rect(parent=self.timeline,width=40,height=10,visibility=goocanvas.ITEM_INVISIBLE, fill_color_rgba=0xaa000044)
-		self.marker.props.pointer_events = 0
-		self.timerect.connect("motion_notify_event", self.timerect_on_motion_notify)
-        	self.timerect.connect("button_press_event", self.timerect_on_button_press)
-		self.timerect.connect("button_release_event", self.timerect_on_button_release)
+		if marker:
+			self.pipeline.play(start=marker[0],stop=marker[0]+marker[1])
 
-		for i in xrange(seconds):
-			goocanvas.Text(parent=self.timeline, text=str(i), y=i*50)
+	def stop(self,widget):
+		self.pipeline.stop()
 
-		self.space = goocanvas.Group(parent=self.root)
-		self.space.translate(50,0)
-
-	def enable_dragging(self,item):
-		item.connect("motion_notify_event", self.on_motion_notify)
-        	item.connect("button_press_event", self.on_button_press)
-		item.connect("button_release_event", self.on_button_release)
-
-	def timerect_on_motion_notify (self, item, target, event):
-		if (self.dragging == True) and (event.state & gtk.gdk.BUTTON1_MASK):
-			if self.drag_y<0:
-				self.marker.props.y=0
-			if event.y>self.drag_y:
-				self.marker.props.y=self.drag_y
-				self.marker.props.height=event.y-self.drag_y
-			else:
-				self.marker.props.y=event.y
-				self.marker.props.height=self.drag_y-event.y
-				
-		return True
-    
-	def timerect_on_button_press (self, item, target, event):
-		if event.button == 1:
-			self.drag_y = event.y
-
-			canvas = item.get_canvas()
-			canvas.pointer_grab (item, gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.BUTTON_RELEASE_MASK, None, event.time)
-        	        self.dragging = True
-
-			self.marker.props.visibility = goocanvas.ITEM_VISIBLE
-			self.marker.props.y=event.y
-			self.marker.props.height=0
-	        return True
-
-	def timerect_on_button_release (self, item, target, event):
-		canvas = item.get_canvas()
-		canvas.pointer_ungrab(item, event.time)
-		self.dragging = False
-
-	def on_motion_notify (self, item, target, event):
-		if (self.dragging == True) and (event.state & gtk.gdk.BUTTON1_MASK):
-			new_x = event.x
-			new_y = event.y
-			item.translate (new_x - self.drag_x, new_y - self.drag_y)
-		return True
-    
-	def on_button_press (self, item, target, event):
-		if event.button == 1:
-			self.drag_x = event.x
-			self.drag_y = event.y
-
-			canvas = item.get_canvas()
-			canvas.pointer_grab (item, gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.BUTTON_RELEASE_MASK, None, event.time)
-        	        self.dragging = True
-	        return True
-
-	def on_button_release (self, item, target, event):
-		canvas = item.get_canvas()
-		canvas.pointer_ungrab(item, event.time)
-		self.dragging = False
-
-	def canvas_button_release(self,widget,event):
-		if self.mode=="text":
-			dialog = gtk.Dialog(title="Text", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
-			entry = gtk.Entry()
-			dialog.vbox.add(entry)
-			dialog.show_all()
-			if dialog.run()==gtk.RESPONSE_ACCEPT:
-				x,y,scale,rotation = self.space.get_simple_transform()
-				text = goocanvas.Text(parent=self.space, text=entry.get_text(), x=event.x-x, y=event.y-y)
-				self.enable_dragging(text)
-			dialog.destroy()
-			self.mode=None
-
-	def insert_text(self,*args):
-		self.mode="text"
-	def play(self,*args):
-		self.pl.play(self.marker.props.y/50.,self.marker.props.height/50.)
+	def set_tempo(self,widget):
+		self.pipeline.set_rate(widget.get_value()/100.)
 
 if __name__=="__main__":
-	glade = gtk.glade.XML("gui.glade", "mainwindow")
-	glade.get_widget("mainwindow").show_all()
-	vbox=glade.get_widget("vbox")
-
-	pl = Pipeline.Pipeline("/home/maxi/Musik/ogg/jamendo_track_401871.ogg")
-#	pl = Pipeline("/home/maxi/Musik/ogg/jamendo_track_9087.ogg")
-#	pl = Pipeline("/home/maxi/test/once/alle.wav")
-#	pl = Pipeline("/home/maxi/Musik/ogg/RicardoV1980 - (none) - Probando camara (bulerias) (2008).ogg")
-
-	fretboard = Visualizer.Fretboard(pl.get_bus())
-	vbox.pack_start(fretboard,expand=False)
-	fretboard.show_all()
-
-#	pl.play(0.5,0,1)
-#	tl = Timeline(200,pl)
-#	glade.get_widget("scrolledwindow").add(tl)
-#	tl.show_all()
-
-	def play(*args):
-		print args
-		pl.play(0.5)
-
-	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit, 'play':play, 'stop':pl.stop})
-#	glade.signal_autoconnect({'gtk_main_quit':gtk.main_quit,'insert_text':tl.insert_text, 'play':pl.play, 'stop':pl.stop, 'set_tempo':pl.set_tempo, 'fretboard_expose':pl.draw_fretboard})
+	app = Transcribe()
 
 	gtk.main()

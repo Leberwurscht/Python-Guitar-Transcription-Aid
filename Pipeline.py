@@ -6,10 +6,13 @@ class Pipeline(gst.Pipeline):
 	def __init__(self,filename=None, bands=4096):
 		gst.Pipeline.__init__(self)
 
+		self.rate=1.
+		self.start_pos=0.
+		self.stop_pos=None
+
 		# filesrc
 		self.filesrc = gst.element_factory_make("filesrc")
 		self.add(self.filesrc)
-
 
 		# decodebin
 		decodebin = gst.element_factory_make("decodebin")
@@ -30,7 +33,6 @@ class Pipeline(gst.Pipeline):
 		self.spectrum = gst.element_factory_make("spectrum")
 		self.add(self.spectrum)
 		scaletempo.link(self.spectrum)
-
 
 		# sink
 		sink = gst.element_factory_make("gconfaudiosink")
@@ -55,13 +57,27 @@ class Pipeline(gst.Pipeline):
 		compatible_pad = self.convert.get_compatible_pad(pad)
 		pad.link(compatible_pad)
 
-	def play(self,rate=1.0,start=0,stop=None):
-		if stop==None:
-			self.seek(rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_NONE,-1)
+	def set_rate(self,rate):
+		self.rate=rate
+
+		if self.get_state()[1]==gst.STATE_PLAYING:
+			self.seek(self.rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_NONE,-1,gst.SEEK_TYPE_NONE,-1)
+
+	def play(self,start=None,stop=None):
+		if start==None: start=self.start_pos
+		if stop==None: stop=self.stop_pos
+
+		if stop<0:
+			self.seek(self.rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_NONE,-1)
 		else:
-			self.seek(rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
-			
+			self.seek(self.rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
+		
+		self.start_pos=start
+		self.stop_pos=stop
 		self.set_state(gst.STATE_PLAYING)
 
 	def stop(self):
 		self.set_state(gst.STATE_PAUSED)
+
+	def get_position(self):
+		return 1.*self.query_position(gst.FORMAT_TIME)[0] / gst.SECOND

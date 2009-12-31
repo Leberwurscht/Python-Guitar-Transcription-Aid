@@ -5,8 +5,8 @@ import gtk, numpy, cairo
 REFERENCE_FREQUENCY = 440
 
 class Base(gtk.DrawingArea):
-	def __init__(self, bus, *args):
-		gtk.DrawingArea.__init__(self,*args)
+	def __init__(self, bus):
+		gtk.DrawingArea.__init__(self)
 
 		bus.add_signal_watch()
 		bus.connect("message", self.on_message)
@@ -34,8 +34,8 @@ class Base(gtk.DrawingArea):
 		pass
 
 class Fretboard(Base):
-	def __init__(self, bus, *args, **kwargs):
-		Base.__init__(self, bus, *args)
+	def __init__(self, bus, **kwargs):
+		Base.__init__(self, bus)
 
 		if "strings" in kwargs: self.strings = kwargs["strings"]
 		else: self.strings = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
@@ -62,7 +62,7 @@ class Fretboard(Base):
 		else: self.markers_radius = self.rectheight/4
 
 		if "markers" in kwargs: self.markers = kwargs["markers"]
-		else: self.markers = [5,7,9,12]
+		else: self.markers = [5,7,9]
 
 		markerspace = self.rectheight/2 + self.markers_radius
 
