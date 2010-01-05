@@ -59,9 +59,7 @@ class Pipeline(gst.Pipeline):
 
 	def set_rate(self,rate):
 		self.rate=rate
-
-		if self.get_state()[1]==gst.STATE_PLAYING:
-			self.seek(self.rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_NONE,-1,gst.SEEK_TYPE_NONE,-1)
+		print self.seek(self.rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_NONE,-1,gst.SEEK_TYPE_NONE,-1)
 
 	def play(self,start=None,stop=None):
 		if start==None: start=self.start_pos
@@ -76,8 +74,11 @@ class Pipeline(gst.Pipeline):
 		self.stop_pos=stop
 		self.set_state(gst.STATE_PLAYING)
 
-	def stop(self):
+	def pause(self):
 		self.set_state(gst.STATE_PAUSED)
+
+	def stop(self):
+		self.set_state(gst.STATE_NULL)
 
 	def get_position(self):
 		return 1.*self.query_position(gst.FORMAT_TIME)[0] / gst.SECOND

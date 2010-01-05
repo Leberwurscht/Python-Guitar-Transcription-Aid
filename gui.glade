@@ -152,7 +152,7 @@
           <widget class="GtkToolbar" id="toolbar1">
             <property name="visible">True</property>
             <child>
-              <widget class="GtkToolButton" id="addtext">
+              <widget class="GtkToolButton" id="inserttext">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Text hinzuf&#xFC;gen</property>
                 <property name="use_underline">True</property>
@@ -165,12 +165,12 @@
               </packing>
             </child>
             <child>
-              <widget class="GtkToolButton" id="play">
+              <widget class="GtkToggleToolButton" id="playpause">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Abspielen</property>
                 <property name="use_underline">True</property>
                 <property name="stock_id">gtk-media-play</property>
-                <signal name="clicked" handler="play"/>
+                <signal name="toggled" handler="playpause"/>
               </widget>
               <packing>
                 <property name="expand">False</property>
@@ -178,7 +178,7 @@
               </packing>
             </child>
             <child>
-              <widget class="GtkToolButton" id="toolbutton1">
+              <widget class="GtkToolButton" id="stop">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Stopp</property>
                 <property name="use_underline">True</property>
@@ -210,12 +210,11 @@
               </packing>
             </child>
             <child>
-              <widget class="GtkSpinButton" id="spinbutton1">
+              <widget class="GtkSpinButton" id="rate">
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="invisible_char">&#x25CF;</property>
                 <property name="adjustment">100 0 100 1 10 10</property>
-                <signal name="value_changed" handler="set_tempo"/>
               </widget>
               <packing>
                 <property name="expand">False</property>
