@@ -3,13 +3,18 @@
   <requires lib="gtk+" version="2.16"/>
   <!-- interface-naming-policy project-wide -->
   <object class="GtkWindow" id="mainwindow">
-    <signal name="delete_event" handler="quit"/>
+    <property name="width_request">400</property>
+    <property name="height_request">400</property>
+    <accel-groups>
+      <group name="accelgroup1"/>
+    </accel-groups>
+    <signal name="destroy" handler="gtk_main_quit"/>
     <child>
       <object class="GtkVBox" id="vbox">
         <property name="visible">True</property>
         <property name="orientation">vertical</property>
         <child>
-          <object class="GtkMenuBar" id="menubar1">
+          <object class="GtkMenuBar" id="menubar">
             <property name="visible">True</property>
             <child>
               <object class="GtkMenuItem" id="menuitem1">
@@ -25,6 +30,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                     <child>
@@ -33,6 +39,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                     <child>
@@ -41,6 +48,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                     <child>
@@ -49,6 +57,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                     <child>
@@ -62,7 +71,8 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
-                        <signal name="activate" handler="quit"/>
+                        <property name="accel_group">accelgroup1</property>
+                        <signal name="activate" handler="gtk_main_quit"/>
                       </object>
                     </child>
                   </object>
@@ -83,6 +93,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                     <child>
@@ -91,6 +102,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                     <child>
@@ -99,6 +111,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                     <child>
@@ -107,6 +120,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                   </object>
@@ -134,6 +148,7 @@
                         <property name="visible">True</property>
                         <property name="use_underline">True</property>
                         <property name="use_stock">True</property>
+                        <property name="accel_group">accelgroup1</property>
                       </object>
                     </child>
                   </object>
@@ -152,7 +167,7 @@
             <child>
               <object class="GtkToolButton" id="inserttext">
                 <property name="visible">True</property>
-                <property name="label" translatable="yes">Insert text</property>
+                <property name="label" translatable="yes">Text hinzuf&#xFC;gen</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">insert-text</property>
                 <signal name="clicked" handler="insert_text"/>
@@ -163,34 +178,12 @@
               </packing>
             </child>
             <child>
-              <object class="GtkSeparatorToolItem" id="line">
+              <object class="GtkToggleToolButton" id="playpause">
                 <property name="visible">True</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="homogeneous">True</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkToggleToolButton" id="pause">
-                <property name="visible">True</property>
-                <property name="label" translatable="yes">Pause</property>
+                <property name="label" translatable="yes">Abspielen</property>
                 <property name="use_underline">True</property>
-                <property name="icon_name">media-playback-pause</property>
-                <signal name="toggled" handler="pause"/>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="homogeneous">True</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkToolButton" id="play">
-                <property name="visible">True</property>
-                <property name="label" translatable="yes">Play</property>
-                <property name="use_underline">True</property>
-                <property name="icon_name">media-playback-start</property>
-                <signal name="clicked" handler="play"/>
+                <property name="stock_id">gtk-media-play</property>
+                <signal name="toggled" handler="playpause"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -200,8 +193,7 @@
             <child>
               <object class="GtkToolButton" id="stop">
                 <property name="visible">True</property>
-                <property name="sensitive">False</property>
-                <property name="label" translatable="yes">Stop</property>
+                <property name="label" translatable="yes">Stopp</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">media-playback-stop</property>
                 <signal name="clicked" handler="stop"/>
@@ -242,6 +234,9 @@
                 <property name="position">1</property>
               </packing>
             </child>
+            <child>
+              <placeholder/>
+            </child>
           </object>
           <packing>
             <property name="expand">False</property>
@@ -250,7 +245,6 @@
         </child>
         <child>
           <object class="GtkScrolledWindow" id="scrolledwindow">
-            <property name="height_request">200</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="hscrollbar_policy">automatic</property>
@@ -266,12 +260,12 @@
       </object>
     </child>
   </object>
-  <object class="GtkAction" id="action1"/>
   <object class="GtkAdjustment" id="adjustment1">
-    <property name="lower">1</property>
+    <property name="value">100</property>
     <property name="upper">100</property>
     <property name="step_increment">1</property>
     <property name="page_increment">10</property>
     <property name="page_size">10</property>
   </object>
+  <object class="GtkAccelGroup" id="accelgroup1"/>
 </interface>

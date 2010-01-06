@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import gtk
-import gtk.glade
 
 import Visualizer
 import Pipeline
@@ -10,56 +9,63 @@ import Timeline
 class Transcribe:
 	def __init__(self):
 		# create gui
-		self.glade = gtk.glade.XML("gui.glade", "mainwindow")
+		self.builder = gtk.Builder()
+		self.builder.add_from_file("gui.glade")
+		self.builder.get_object("rate").set_value(100)
 
 		# create pipeline
 		self.pipeline = Pipeline.Pipeline("/home/maxi/Musik/ogg/jamendo_track_401871.ogg")
+		bus = self.pipeline.get_bus()
+		bus.add_signal_watch()
+#		bus.connect()
 
 		# create timeline
 		self.timeline = Timeline.Timeline(self.pipeline.duration)
-		self.glade.get_widget("scrolledwindow").add(self.timeline)
+		self.builder.get_object("scrolledwindow").add(self.timeline)
 		self.timeline.show_all()
 
 		# create fretboard
-		self.fretboard = Visualizer.Fretboard(self.pipeline.get_bus())
-		self.glade.get_widget("vbox").pack_start(self.fretboard,expand=False)
+		self.fretboard = Visualizer.Fretboard(self.pipeline.spectrum)
+		self.fretboard.connect_to_bus(bus)
+		self.builder.get_object("vbox").pack_start(self.fretboard,expand=False)
 		self.fretboard.show_all()
 
 		# connect signals
-		self.glade.signal_autoconnect({
-			'gtk_main_quit':gtk.main_quit,
-			'insert_text':self.insert_text,
-			'playpause':self.playpause,
-			'stop':self.stop,
-		})
+		self.builder.connect_signals(self)
 
 	def run(self):
-		self.glade.get_widget("mainwindow").show_all()
+		self.builder.get_object("mainwindow").show_all()
 		gtk.main()
 
 	# callbacks
 
+	def quit(self, *args):
+		gtk.main_quit()
+
 	def insert_text(self,widget):
 		self.timeline.mode="insert_text"
 
-	def playpause(self,widget):
+	def play(self,widget):
+		marker = self.timeline.get_marker()
+		rate = self.builder.get_object("rate").get_value()/100.
+
+		if marker:
+			self.pipeline.play(rate,start=marker[0],stop=marker[0]+marker[1])
+
+		self.builder.get_object("pause").set_active(False)
+		self.builder.get_object("stop").set_sensitive(True)
+
+	def pause(self, widget):
 		if widget.get_active():
-			self.pipeline.play()
-			# play from current position if paused
-			# play from marker start if stopped
-		else:
 			self.pipeline.pause()
-			
-#		marker = self.timeline.get_marker()
-#
-#		if marker:
-#			self.pipeline.play(start=marker[0],stop=marker[0]+marker[1])
+		else:
+			rate = self.builder.get_object("rate").get_value()/100.
+			self.pipeline.play()
 
 	def stop(self,widget):
-		# set 
-		self.pipeline.stop()
-		self.glade.get_widget("playpause").set_active(False)
-
+		self.pipeline.pause()
+		self.builder.get_object("pause").set_active(False)
+		self.builder.get_object("stop").set_sensitive(False)
 
 if __name__=="__main__":
 	transcribe = Transcribe()

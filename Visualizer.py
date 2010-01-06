@@ -5,16 +5,22 @@ import gtk, numpy, cairo
 REFERENCE_FREQUENCY = 440
 
 class Base(gtk.DrawingArea):
-	def __init__(self, bus):
+	def __init__(self, spectrum_element):
 		gtk.DrawingArea.__init__(self)
-
-		bus.add_signal_watch()
-		bus.connect("message", self.on_message)
-
 		self.connect("expose_event", self.draw)
 
+		self.spectrum_element = spectrum_element
+		self.spectrum_element.get_pad("sink").connect("notify", self.on_notify)
+
+	def connect_to_bus(self, bus):
+		bus.add_signal_watch()
+		bus.connect("message::element", self.on_message)
+
+	def on_notify(self, *args):
+		print args
+
 	def on_message(self, bus, message):
-		if message.structure and message.structure.get_name()=="spectrum" and message.structure.has_field("magnitude"):
+		if message.src==self.spectrum_element:
 			bands = message.src.get_property("bands")
 			rate = message.src.get_pad("sink").get_negotiated_caps()[0]["rate"]
 
@@ -34,8 +40,8 @@ class Base(gtk.DrawingArea):
 		pass
 
 class Fretboard(Base):
-	def __init__(self, bus, **kwargs):
-		Base.__init__(self, bus)
+	def __init__(self, spectrum_element, **kwargs):
+		Base.__init__(self, spectrum_element)
 
 		if "strings" in kwargs: self.strings = kwargs["strings"]
 		else: self.strings = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
@@ -71,34 +77,35 @@ class Fretboard(Base):
 		self.set_size_request((self.frets+1)*self.rectwidth + 2*self.paddingx, len(self.strings)*self.rectheight + markerspace + 2*self.paddingy)
 
 	def draw(self, widget, event):
-		if not hasattr(self,"magnitudes"): return True
-
 		context = widget.window.cairo_create()
 
-		linear = cairo.LinearGradient(self.semitones[0]*self.rectwidth, 0, self.semitones[-1]*self.rectwidth, 0)
+		if hasattr(self,"magnitudes"):
+			pattern = cairo.LinearGradient(self.semitones[0]*self.rectwidth, 0, self.semitones[-1]*self.rectwidth, 0)
 
-		semitonerange = self.semitones[-1]-self.semitones[0]
+			semitonerange = self.semitones[-1]-self.semitones[0]
 
-		brightness_slope = - 1.0 / (self.magnitude_max - self.magnitude_min)
-		brightness_const = 1.0*self.magnitude_max / (self.magnitude_max - self.magnitude_min)
+			brightness_slope = - 1.0 / (self.magnitude_max - self.magnitude_min)
+			brightness_const = 1.0*self.magnitude_max / (self.magnitude_max - self.magnitude_min)
 
-		for i in xrange(len(self.semitones)):
-			brightness = brightness_slope * self.magnitudes[i] + brightness_const
-			brightness = max(0.,min(1.,brightness))
+			for i in xrange(len(self.semitones)):
+				brightness = brightness_slope * self.magnitudes[i] + brightness_const
+				brightness = max(0.,min(1.,brightness))
 
-			linear.add_color_stop_rgb( ( self.semitones[i]-self.semitones[0] ) / semitonerange, brightness,brightness,brightness)
-				
-		matrix = linear.get_matrix()
+				pattern.add_color_stop_rgb( ( self.semitones[i]-self.semitones[0] ) / semitonerange, brightness,brightness,brightness)
+		else:
+			pattern = cairo.SolidPattern(1., 1., 1.)
+
+		matrix = pattern.get_matrix()
 
 		for string,semitone in self.strings.iteritems():
 			matrix_copy = cairo.Matrix() * matrix
 			matrix_copy.translate(self.rectwidth*semitone - self.rectwidth/2.,0)
 			
-			linear.set_matrix(matrix_copy)
+			pattern.set_matrix(matrix_copy)
 			
 			for fret in xrange(self.frets+1):
 				context.rectangle(self.paddingx+fret*self.rectwidth, self.paddingy+self.rectheight*(string-1), self.rectwidth, self.rectheight)
-				context.set_source(linear)
+				context.set_source(pattern)
 				context.fill_preserve()
 
 				context.set_line_width(3)
