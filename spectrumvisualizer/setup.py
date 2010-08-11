@@ -5,8 +5,8 @@ from distutils.core import setup
 from dsextras import PkgConfigExtension
 
 module1 = PkgConfigExtension(name='spectrumvisualizer',
-	pkc_name = 'gobject-2.0',
-	pkc_version = '2.2.0',
+	pkc_name = 'gstreamer-0.10',
+	pkc_version = '',
 	sources = ['spectrumvisualizer.c'])
 
 setup(name = 'spectrumvisualizer',

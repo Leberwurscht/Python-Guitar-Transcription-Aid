@@ -1,6 +1,7 @@
 #include <Python.h>
 #include "structmember.h"
 #include <pygobject.h>
+#include <gst/gst.h>
 
 //  http://faq.pygtk.org/index.py?req=show&file=faq23.015.htp
 
@@ -27,15 +28,24 @@ typedef struct {
 //	int size;
 //	boost::adjacency_list<> *boostgraph;
 	PyGObject *spectrum_element;
+	PyGObject *bus;
 } base;
 
 static int base_init(base *self, PyObject *args, PyObject *kwds)
 {
 //	int graph_size;
 	PyGObject *spectrum_element;
-	if (!PyArg_ParseTuple(args, "O!", PyGObject_Type, &spectrum_element)) return -1;
+	PyGObject *bus;
+	if (!PyArg_ParseTuple(args, "O!O!", PyGObject_Type, &spectrum_element, PyGObject_Type, &bus)) return -1;
 	self->spectrum_element = spectrum_element;
 	Py_INCREF(spectrum_element);
+	self->bus = bus;
+	Py_INCREF(bus);
+
+	GstBus *gstbus = GST_BUS(bus->obj);
+	gst_bus_add_signal_watch(gstbus);
+//	g_signal_connect(G_OBJECT(gstbus), "message::element",
+//		G_CALLBACK(on_message));
 //	widget = GTK_WIDGET(py_widget->obj);
 
 //	self->size = graph_size;
@@ -47,6 +57,7 @@ static void base_dealloc(base *self)
 {
 //	delete self->boostgraph;
 	Py_XDECREF(self->spectrum_element);
+	Py_XDECREF(self->bus);
 	self->ob_type->tp_free((PyObject*)self);
 }
 
@@ -76,6 +87,7 @@ static PyObject *graph_add_edge(graph *self, PyObject *args)
 */
 static PyMemberDef base_members[] = {
 	{"spectrum_element", T_OBJECT, offsetof(base, spectrum_element), 0, "spectrum element"},
+	{"bus", T_OBJECT, offsetof(base, bus), 0, "bus"},
 //	{"size", T_INT, offsetof(graph, size), 0, "graph size"},
 	{NULL}
 };
