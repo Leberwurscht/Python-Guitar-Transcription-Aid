@@ -1,0 +1,2 @@
+#!/bin/bash
+PYTHONPATH=$PYTHONPATH:spectrumvisualizer/build/lib.linux-x86_64-2.6 /bin/bash
