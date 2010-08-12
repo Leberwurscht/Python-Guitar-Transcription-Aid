@@ -29,7 +29,15 @@ typedef struct {
 //	boost::adjacency_list<> *boostgraph;
 	PyGObject *spectrum_element;
 	PyGObject *bus;
+	PyObject *called;
 } base;
+
+static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
+{
+	base *b = data;
+	b->called = Py_BuildValue("i", 1);
+	return TRUE;
+}
 
 static int base_init(base *self, PyObject *args, PyObject *kwds)
 {
@@ -44,8 +52,8 @@ static int base_init(base *self, PyObject *args, PyObject *kwds)
 
 	GstBus *gstbus = GST_BUS(bus->obj);
 	gst_bus_add_signal_watch(gstbus);
-//	g_signal_connect(G_OBJECT(gstbus), "message::element",
-//		G_CALLBACK(on_message));
+	g_signal_connect(G_OBJECT(gstbus), "message::element",
+		G_CALLBACK(on_message), self);
 //	widget = GTK_WIDGET(py_widget->obj);
 
 //	self->size = graph_size;
@@ -88,6 +96,7 @@ static PyObject *graph_add_edge(graph *self, PyObject *args)
 static PyMemberDef base_members[] = {
 	{"spectrum_element", T_OBJECT, offsetof(base, spectrum_element), 0, "spectrum element"},
 	{"bus", T_OBJECT, offsetof(base, bus), 0, "bus"},
+	{"called", T_OBJECT, offsetof(base, called), 0, "called"},
 //	{"size", T_INT, offsetof(graph, size), 0, "graph size"},
 	{NULL}
 };
