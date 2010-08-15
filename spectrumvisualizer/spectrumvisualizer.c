@@ -188,7 +188,6 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	PyObject *module;
 	module = PyImport_ImportModule("gobject");
 	PyGObject_Type = (PyTypeObject*)PyObject_GetAttrString(module, "GObject");
-	Py_DECREF(module);
 
 	baseType.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE; // second one to allow subclassing (http://groups.google.com/group/comp.lang.python/browse_thread/thread/634752a588a033d6)
 	baseType.tp_base = PyGObject_Type;	// inherit from GObject
@@ -202,8 +201,9 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 
 
 	PyType_Ready(&baseType);
+
 //	test = PyObject_GetAttrString((PyObject*)PyGObject_Type, "__gsignals__");
-/*	PyObject *d = PyDict_New();
+	PyObject *d = PyDict_New();
 	PyObject *t = PyTuple_Pack(3,
 		PyObject_GetAttrString(module, "SIGNAL_RUN_FIRST"),
 		PyObject_GetAttrString(module, "TYPE_NONE"),
@@ -213,11 +213,17 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 
 //	PyObject *t = (PyTypeObject*)PyObject_GetAttrString(module, "SIGNAL_RUN_FIRST");
 //	PyObject *t = Py_BuildValue("i", 12);
-	PyDict_SetItemString(d, "magnitudes_available", t);*/
+	PyDict_SetItemString(d, "magnitudes_available", t);
 /*	Py_INCREF(d);
-	Py_INCREF(t);
-	PyObject_SetAttrString((PyObject*)&baseType, "__gsignalss__", d);*/
-//	PyDict_SetItemString(baseType.tp_dict, "__gsignals__", d);
+	Py_INCREF(t);*/
+//	PyObject_SetAttrString((PyObject*)&baseType, "__gsignalss__", Py_BuildValue("i", 12));
+	PyDict_SetItemString(baseType.tp_dict, "__gsignals__", d);
 	Py_INCREF(&baseType);
+
+	PyObject *f = PyObject_GetAttrString((PyObject*)module, "type_register");
+	PyObject *arglist = Py_BuildValue("(O)", (PyObject*)&baseType);
+	PyObject_CallObject(f, arglist);
+	Py_DECREF(module);
+
 	PyModule_AddObject(mod, "base", (PyObject*)&baseType);
 }
