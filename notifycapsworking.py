@@ -223,7 +223,7 @@ class Discoverer(gst.Pipeline):
             self.finished = True
             return
         # we connect a fakesink to the new pad...
-        fakesink = gst.element_factory_make("fakesink")
+        fakesink = gst.element_factory_make("gconfaudiosink")
         self.add(fakesink)
         sinkpad = fakesink.get_pad("sink")
         # ... and connect a callback for when the caps are fixed

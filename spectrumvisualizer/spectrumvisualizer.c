@@ -31,16 +31,30 @@ typedef struct {
 //	int size;
 //	boost::adjacency_list<> *boostgraph;
 	PyGObject *spectrum_element;
-	PyGObject *bus;
+	PyGObject *pipeline;
 	PyObject *called;
+	GstClock *sync_clock;
 } base;
 
-static gboolean magnitudes_available_signal(GstClock * sync_clock, GstClockTime time, GstClockID id, gpointer user_data)
+typedef struct {
+	base *b;
+	gint bands;
+	gint rate;
+	gint threshold;
+	PyObject *magnitudes;
+} spectrum_message;
+
+static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time, GstClockID id, gpointer user_data)
 {
-/*	if (GST_CLOCK_TIME_IS_VALID (time))
-		g_idle_add (delayed_idle_spectrum_update, user_data);
-	else
-		g_free (user_data);*/
+	if (GST_CLOCK_TIME_IS_VALID(time))
+	{
+		spectrum_message *m = user_data;
+//		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
+//		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
+		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", 0);
+	}
+
+	g_free(user_data);
 
 	return TRUE;
 }
@@ -73,11 +87,24 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 		if (GST_CLOCK_TIME_IS_VALID (waittime))
 		{
 			GstClockTime basetime = gst_element_get_base_time(spectrum);
+			GstClockID clock_id = gst_clock_new_single_shot_id(b->sync_clock, basetime+waittime);
+			spectrum_message *m = malloc(sizeof(spectrum_message));
+
+			g_object_get(message_element,"bands",&(m->bands));
+			g_object_get(message_element,"threshold",&(m->threshold));
+
+			GstElement *gstelement = GST_ELEMENT(b->spectrum_element->obj);
+			GstPad *sink = gst_element_get_static_pad(gstelement, "sink");
+			//g_object_get(sink,"rate",&rate);
+			m->rate = 22000;
+
+			m->magnitudes = Py_BuildValue("i", 1);
+			m->b = b;
+			gst_clock_id_wait_async(clock_id, delayed_spectrum_update, m);
 		}
 
 //		b->called = Py_BuildValue("i", 1);
 //		g_signal_emit_by_name(G_OBJECT((b->gobj).obj), "notify");
-		g_signal_emit_by_name(G_OBJECT((b->gobj).obj), "magnitudes_available");
 	}
 	return TRUE;
 }
@@ -99,18 +126,20 @@ static int base_init(base *self, PyObject *args, PyObject *kwds)
 
 //	int graph_size;
 	PyGObject *spectrum_element;
-	PyGObject *bus;
-	if (!PyArg_ParseTuple(args, "O!O!", PyGObject_Type, &spectrum_element, PyGObject_Type, &bus)) return -1;
+	PyGObject *pipeline;
+	if (!PyArg_ParseTuple(args, "O!O!", PyGObject_Type, &spectrum_element, PyGObject_Type, &pipeline)) return -1;
 	self->spectrum_element = spectrum_element;
 	Py_INCREF(spectrum_element);
-	self->bus = bus;
-	Py_INCREF(bus);
+	self->pipeline = pipeline;
+	Py_INCREF(pipeline);
 
 	self->called = Py_BuildValue("i", 0);
 
-	GstBus *gstbus = GST_BUS(bus->obj);
+	GstBus *gstbus = gst_pipeline_get_bus(GST_PIPELINE(pipeline->obj));
 	gst_bus_add_signal_watch(gstbus);
 	g_signal_connect(G_OBJECT(gstbus), "message::element", G_CALLBACK(on_message), self);
+
+	self->sync_clock = gst_pipeline_get_clock(GST_PIPELINE(pipeline->obj));
 
 //	GstElement *gstelement = GST_ELEMENT(spectrum_element->obj);
 ////	GstPad *sink = gst_element_get_static_pad(gstelement, "sink");
@@ -129,7 +158,7 @@ static void base_dealloc(base *self)
 {
 //	delete self->boostgraph;
 	Py_XDECREF(self->spectrum_element);
-	Py_XDECREF(self->bus);
+	Py_XDECREF(self->pipeline);
 //	self->ob_type->tp_free((PyObject*)self);
 }
 
@@ -159,7 +188,7 @@ static PyObject *graph_add_edge(graph *self, PyObject *args)
 */
 static PyMemberDef base_members[] = {
 	{"spectrum_element", T_OBJECT, offsetof(base, spectrum_element), 0, "spectrum element"},
-	{"bus", T_OBJECT, offsetof(base, bus), 0, "bus"},
+	{"pipeline", T_OBJECT, offsetof(base, pipeline), 0, "pipeline"},
 	{"called", T_OBJECT, offsetof(base, called), 0, "called"},
 //	{"size", T_INT, offsetof(graph, size), 0, "graph size"},
 	{NULL}
@@ -202,28 +231,27 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 
 	PyType_Ready(&baseType);
 
-//	test = PyObject_GetAttrString((PyObject*)PyGObject_Type, "__gsignals__");
+	// add magnitudes-available signal to base type
+	// (see http://www.pygtk.org/articles/subclassing-gobject/sub-classing-gobject-in-python.htm, "Creating your own signals")
+
 	PyObject *d = PyDict_New();
 	PyObject *t = PyTuple_Pack(3,
 		PyObject_GetAttrString(module, "SIGNAL_RUN_FIRST"),
 		PyObject_GetAttrString(module, "TYPE_NONE"),
+//		PyTuple_Pack(4, PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"))
 		PyTuple_Pack(1, PyObject_GetAttrString(module, "TYPE_INT"))
 	);
-//	PyObject *t = PyTuple_Pack(1, PyObject_GetAttrString((PyObject*)PyGObject_Type, "SIGNAL_RUN_FIRST"));
-
-//	PyObject *t = (PyTypeObject*)PyObject_GetAttrString(module, "SIGNAL_RUN_FIRST");
-//	PyObject *t = Py_BuildValue("i", 12);
 	PyDict_SetItemString(d, "magnitudes_available", t);
 /*	Py_INCREF(d);
 	Py_INCREF(t);*/
-//	PyObject_SetAttrString((PyObject*)&baseType, "__gsignalss__", Py_BuildValue("i", 12));
 	PyDict_SetItemString(baseType.tp_dict, "__gsignals__", d);
 	Py_INCREF(&baseType);
 
 	PyObject *f = PyObject_GetAttrString((PyObject*)module, "type_register");
 	PyObject *arglist = Py_BuildValue("(O)", (PyObject*)&baseType);
 	PyObject_CallObject(f, arglist);
-	Py_DECREF(module);
 
 	PyModule_AddObject(mod, "base", (PyObject*)&baseType);
+
+	Py_DECREF(module);
 }
