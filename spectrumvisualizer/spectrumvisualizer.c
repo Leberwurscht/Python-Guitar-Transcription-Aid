@@ -49,9 +49,9 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 	if (GST_CLOCK_TIME_IS_VALID(time))
 	{
 		spectrum_message *m = user_data;
+		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
 //		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
-//		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
-		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", 0);
+//		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", 0);
 	}
 
 	g_free(user_data);
@@ -90,11 +90,13 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 			GstClockID clock_id = gst_clock_new_single_shot_id(b->sync_clock, basetime+waittime);
 			spectrum_message *m = malloc(sizeof(spectrum_message));
 
-			g_object_get(message_element,"bands",&(m->bands));
-			g_object_get(message_element,"threshold",&(m->threshold));
+			gint bands, threshold;
+//			g_object_get_property(message_element,"bands", &bands);
+//			g_object_get_property(message_element,"threshold",&threshold);
+			g_object_get(message_element, "bands", &(m->bands), "threshold", &(m->threshold), NULL);
 
-			GstElement *gstelement = GST_ELEMENT(b->spectrum_element->obj);
-			GstPad *sink = gst_element_get_static_pad(gstelement, "sink");
+//			GstElement *gstelement = GST_ELEMENT(b->spectrum_element->obj);
+//			GstPad *sink = gst_element_get_static_pad(gstelement, "sink");
 			//g_object_get(sink,"rate",&rate);
 			m->rate = 22000;
 
@@ -226,8 +228,6 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	baseType.tp_members = base_members;
 	baseType.tp_methods = base_methods;
 	baseType.tp_doc = "spectrum visualizer base object";
-	
-
 
 	PyType_Ready(&baseType);
 
@@ -238,8 +238,8 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	PyObject *t = PyTuple_Pack(3,
 		PyObject_GetAttrString(module, "SIGNAL_RUN_FIRST"),
 		PyObject_GetAttrString(module, "TYPE_NONE"),
-//		PyTuple_Pack(4, PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"))
-		PyTuple_Pack(1, PyObject_GetAttrString(module, "TYPE_INT"))
+		PyTuple_Pack(4, PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"))
+//		PyTuple_Pack(1, PyObject_GetAttrString(module, "TYPE_INT"))
 	);
 	PyDict_SetItemString(d, "magnitudes_available", t);
 /*	Py_INCREF(d);
