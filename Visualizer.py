@@ -1,20 +1,25 @@
 #!/usr/bin/env python
 
 import gtk, numpy, cairo
+import spectrumvisualizer
 
 REFERENCE_FREQUENCY = 440
 
 class Base(gtk.DrawingArea):
-	def __init__(self, spectrum_element):
+	def __init__(self, spectrum_element,pipeline):
 		gtk.DrawingArea.__init__(self)
 		self.connect("expose_event", self.draw)
 
 		self.spectrum_element = spectrum_element
-		self.spectrum_element.get_pad("sink").connect("notify", self.on_notify)
-
-	def connect_to_bus(self, bus):
+#		self.spectrum_element.get_pad("sink").connect("notify", self.on_notify)
+		self.pipeline=pipeline
+		bus=self.pipeline.get_bus()
 		bus.add_signal_watch()
 		bus.connect("message::element", self.on_message)
+
+#	def connect_to_bus(self, bus):
+#		bus.add_signal_watch()
+#		bus.connect("message::element", self.on_message)
 
 	def on_notify(self, *args):
 		print args
@@ -39,9 +44,32 @@ class Base(gtk.DrawingArea):
 	def draw(self, widget, event):
 		pass
 
-class Fretboard(Base):
-	def __init__(self, spectrum_element, **kwargs):
-		Base.__init__(self, spectrum_element)
+class Base2(gtk.DrawingArea):
+	def __init__(self,spectrum_element,pipeline):
+		gtk.DrawingArea.__init__(self)
+		self.connect("expose_event", self.draw)
+		self.spectrum_element = spectrum_element
+		self.pipeline=pipeline
+
+		self.visbase = spectrumvisualizer.base(spectrum_element, pipeline)
+		self.visbase.connect("magnitudes_available", self.on_magnitudes)
+
+	def on_magnitudes(self,visbase,bands,rate,threshold,magnitudes):
+		bands_array = numpy.arange(bands)
+		frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
+		self.semitones = 12. * numpy.log2(frequencies/REFERENCE_FREQUENCY)
+
+		self.magnitudes = numpy.array(magnitudes)
+
+		self.magnitude_min = threshold
+
+		self.queue_draw()
+		
+	def draw(self,widget,event): pass
+
+class Fretboard(Base2):
+	def __init__(self, spectrum_element,pipeline,**kwargs):
+		Base2.__init__(self, spectrum_element,pipeline)
 
 		if "strings" in kwargs: self.strings = kwargs["strings"]
 		else: self.strings = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}

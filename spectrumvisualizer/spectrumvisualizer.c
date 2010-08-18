@@ -49,16 +49,18 @@ typedef struct {
 
 static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time, GstClockID id, gpointer user_data)
 {
+	spectrum_message *m = user_data;
+
 	if (GST_CLOCK_TIME_IS_VALID(time))
 	{
-		spectrum_message *m = user_data;
-		printf ("Hello World %d %d!\n", (&(m->b->gobj))->ob_refcnt, (&(m->b->gobj))->obj);
+//		printf ("Hello World %d %d!\n", (&(m->b->gobj))->ob_refcnt, (&(m->b->gobj))->obj);
 //		g_signal_emit_by_name(NULL,"magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
 		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
 //		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
 //		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", 0);
 	}
 
+	Py_DECREF(m->b);
 	g_free(user_data);
 
 	return TRUE;

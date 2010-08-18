@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import gtk, gobject
+gobject.threads_init()
 
 import Visualizer
 import Pipeline
@@ -27,8 +28,8 @@ class Transcribe:
 		self.timeline.show_all()
 
 		# create fretboard
-		self.fretboard = Visualizer.Fretboard(self.pipeline.spectrum)
-		self.fretboard.connect_to_bus(bus)
+		self.fretboard = Visualizer.Fretboard(self.pipeline.spectrum, self.pipeline)
+#		self.fretboard.connect_to_bus(bus)
 		self.builder.get_object("vbox").pack_start(self.fretboard,expand=False)
 		self.fretboard.show_all()
 
