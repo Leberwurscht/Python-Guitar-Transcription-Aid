@@ -44,6 +44,13 @@ class Timeline(goocanvas.Canvas):
 		for i in xrange(int(duration)):
 			goocanvas.Text(parent=self.timeline, text=str(i), y=i*self.scale)
 
+		# position marker
+		self.posmarker = goocanvas.polyline_new_line(root, 0, 0, self.width, 0)
+
+	# position marker
+	def set_position(self, pos):
+		self.posmarker.props.y = self.scale*pos
+
 	# marker
 	def get_marker(self):
 		if self.marker.props.visibility==goocanvas.ITEM_INVISIBLE:

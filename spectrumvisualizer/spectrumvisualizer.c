@@ -2,6 +2,8 @@
 #include "structmember.h"
 #include <pygobject.h>
 #include <gst/gst.h>
+#include <stdio.h>
+
 
 // http://faq.pygtk.org/index.py?req=show&file=faq23.015.htp
 // http://cgit.freedesktop.org/gstreamer/gst-plugins-good/tree/tests/examples/spectrum/demo-osssrc.c
@@ -23,6 +25,7 @@ static PyMethodDef Methods[] = {
 };*/
 
 static PyTypeObject *PyGObject_Type=NULL;
+static PyTypeObject *array_type=NULL;
 //PyObject *test;
 
 typedef struct {
@@ -38,7 +41,7 @@ typedef struct {
 
 typedef struct {
 	base *b;
-	gint bands;
+	guint bands;
 	gint rate;
 	gint threshold;
 	PyObject *magnitudes;
@@ -49,6 +52,8 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 	if (GST_CLOCK_TIME_IS_VALID(time))
 	{
 		spectrum_message *m = user_data;
+		printf ("Hello World %d %d!\n", (&(m->b->gobj))->ob_refcnt, (&(m->b->gobj))->obj);
+//		g_signal_emit_by_name(NULL,"magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
 		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
 //		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", m->bands, m->rate, m->threshold, m->magnitudes);
 //		g_signal_emit_by_name(G_OBJECT((m->b->gobj).obj), "magnitudes_available", 0);
@@ -88,20 +93,53 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 		{
 			GstClockTime basetime = gst_element_get_base_time(spectrum);
 			GstClockID clock_id = gst_clock_new_single_shot_id(b->sync_clock, basetime+waittime);
-			spectrum_message *m = malloc(sizeof(spectrum_message));
+			spectrum_message *m = g_malloc(sizeof(spectrum_message));
 
-			gint bands, threshold;
-//			g_object_get_property(message_element,"bands", &bands);
-//			g_object_get_property(message_element,"threshold",&threshold);
 			g_object_get(message_element, "bands", &(m->bands), "threshold", &(m->threshold), NULL);
 
-//			GstElement *gstelement = GST_ELEMENT(b->spectrum_element->obj);
-//			GstPad *sink = gst_element_get_static_pad(gstelement, "sink");
-			//g_object_get(sink,"rate",&rate);
 			m->rate = 22000;
+			GstElement *gstelement = GST_ELEMENT(b->spectrum_element->obj);
+			GstPad *sink = gst_element_get_static_pad(gstelement, "sink");
+			GstCaps *caps = gst_pad_get_negotiated_caps(sink);
+			GstStructure *s2 = gst_caps_get_structure(caps, 0);
+			gst_structure_get_int(s2, "rate", &(m->rate));
+//			gst_object_unref(caps);
 
-			m->magnitudes = Py_BuildValue("i", 1);
+//			m->magnitudes = Py_BuildValue("i", 1);
+//			m->magnitudes = PyObject_CallFunction(array_type, "c", 'f');
+//			void **buf;
+//			int *bufsize;
+//			PyObject_AsWriteBuffer(m->magnitudes, buf, bufsize);
+//			Py_buffer *view;
+//			PyObject_GetBuffer(m->magnitudes->obj, view, PyBUF_WRITABLE);
+//			PyObject *buf = PyBuffer_New(m->bands);
+//			m->magnitudes = buf;
+			GValue *list = gst_structure_get_value(s, "magnitude");
+
+/*			PyObject *test = PyList_New(4000);
+			int i; for (i=0;i<4000;i++)
+			{
+				PyObject *o = Py_BuildValue("f",1.);
+				PyList_SetItem(test, i, o);
+				Py_INCREF(o);
+			}
+			m->magnitudes = test;
+			Py_INCREF(test);*/
+
+			int i;
+			m->magnitudes = PyList_New(m->bands);
+			for (i=0; i < (m->bands); i++)
+			{
+				GValue *value = gst_value_list_get_value(list, i);
+				gfloat f = g_value_get_float(value);
+				PyList_SetItem(m->magnitudes, i, Py_BuildValue("f", f));
+			}
+//			m->magnitudes = PyObject_CallFunction(array_type, "cO", 'f', buf);
+			
+		//	PyBuffer_Release(view);
+
 			m->b = b;
+			Py_INCREF(b);
 			gst_clock_id_wait_async(clock_id, delayed_spectrum_update, m);
 		}
 
@@ -159,8 +197,8 @@ static int base_init(base *self, PyObject *args, PyObject *kwds)
 static void base_dealloc(base *self)
 {
 //	delete self->boostgraph;
-	Py_XDECREF(self->spectrum_element);
-	Py_XDECREF(self->pipeline);
+//	Py_XDECREF(self->spectrum_element);
+//	Py_XDECREF(self->pipeline);
 //	self->ob_type->tp_free((PyObject*)self);
 }
 
@@ -209,11 +247,15 @@ static PyTypeObject baseType = {
 	sizeof(base)
 };
 
-
 PyMODINIT_FUNC initspectrumvisualizer(void)
 {
 	PyObject* mod;
 	mod = Py_InitModule3("spectrumvisualizer", NULL, "Spectrum visualizer");
+
+
+	PyObject *amodule = PyImport_ImportModule("array");
+	array_type = (PyTypeObject*)PyObject_GetAttrString(amodule, "array");
+	Py_DECREF(amodule);
 
 	init_pygobject();
 	PyObject *module;
@@ -238,7 +280,7 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	PyObject *t = PyTuple_Pack(3,
 		PyObject_GetAttrString(module, "SIGNAL_RUN_FIRST"),
 		PyObject_GetAttrString(module, "TYPE_NONE"),
-		PyTuple_Pack(4, PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"))
+		PyTuple_Pack(4, PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_INT"), PyObject_GetAttrString(module, "TYPE_PYOBJECT"))
 //		PyTuple_Pack(1, PyObject_GetAttrString(module, "TYPE_INT"))
 	);
 	PyDict_SetItemString(d, "magnitudes_available", t);
@@ -250,6 +292,7 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	PyObject *f = PyObject_GetAttrString((PyObject*)module, "type_register");
 	PyObject *arglist = Py_BuildValue("(O)", (PyObject*)&baseType);
 	PyObject_CallObject(f, arglist);
+	Py_DECREF(arglist);
 
 	PyModule_AddObject(mod, "base", (PyObject*)&baseType);
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
-import gtk
+import gtk, gobject
 
 import Visualizer
 import Pipeline
 import Timeline
+import sys
 
 class Transcribe:
 	def __init__(self):
@@ -14,7 +15,8 @@ class Transcribe:
 		self.builder.get_object("rate").set_value(100)
 
 		# create pipeline
-		self.pipeline = Pipeline.Pipeline("/home/maxi/Musik/ogg/jamendo_track_401871.ogg")
+#		self.pipeline = Pipeline.Pipeline("/home/maxi/Musik/Audio/jamendo_track_401871.ogg")
+		self.pipeline = Pipeline.Pipeline(sys.argv[1])
 		bus = self.pipeline.get_bus()
 		bus.add_signal_watch()
 #		bus.connect()
@@ -32,6 +34,14 @@ class Transcribe:
 
 		# connect signals
 		self.builder.connect_signals(self)
+
+		# update position marker
+		gobject.timeout_add(100, self.update_position_marker)
+
+	def update_position_marker(self,*args):
+		pos = self.pipeline.get_position()
+		self.timeline.set_position(pos)
+		return True
 
 	def run(self):
 		self.builder.get_object("mainwindow").show_all()
