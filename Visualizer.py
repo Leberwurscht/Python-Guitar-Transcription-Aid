@@ -67,9 +67,9 @@ class Base2(gtk.DrawingArea):
 		
 	def draw(self,widget,event): pass
 
-class Fretboard(Base2):
+class Fretboard(Base):
 	def __init__(self, spectrum_element,pipeline,**kwargs):
-		Base2.__init__(self, spectrum_element,pipeline)
+		Base.__init__(self, spectrum_element,pipeline)
 
 		if "strings" in kwargs: self.strings = kwargs["strings"]
 		else: self.strings = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
@@ -155,3 +155,21 @@ class Fretboard(Base2):
 		context.stroke()
 
 		return True
+
+class SingleString(Fretboard):
+	""" Displays spectrum on one string, but also for overtones. """
+	def __init__(self, spectrum_element,pipeline,**kwargs):
+		if "tune" in kwargs: self.tune = kwargs["tune"]
+		else: self.tune = -5
+
+		if "overtones" in kwargs: self.overtones = kwargs["overtones"]
+		else: self.overtones = 10
+
+		if "rectheight" in kwargs: self.rectheight = kwargs["rectheight"]
+		else: self.rectheight = 10
+
+		kwargs["strings"] = {}
+		for i in xrange(1,self.overtones+2):
+			kwargs["strings"][i] = self.tune + 12.*numpy.log2(i)
+
+		Fretboard.__init__(self, spectrum_element,pipeline,**kwargs)

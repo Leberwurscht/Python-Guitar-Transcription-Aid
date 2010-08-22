@@ -61,7 +61,7 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 	}
 
 	Py_DECREF(m->b);
-	g_free(user_data);
+	g_free(m);
 
 	return TRUE;
 }
