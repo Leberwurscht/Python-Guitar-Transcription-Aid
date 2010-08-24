@@ -32,13 +32,11 @@ static PyMemberDef base_members[] = {
 
 // struct for delaying messages
 typedef struct {
-//	base *visualizer_object;
-	GObject *gobj; // gobject on which to emit the signal
+	base *visualizer_object;
 	guint bands;
 	gint rate;
 	gint threshold;
-//	PyObject *magnitudes;
-	const GValue *magnitudes;
+	PyObject *magnitudes;
 } spectrum_message;
 
 // fire signals for delayed spectrum messages
@@ -48,12 +46,10 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 
 	if (GST_CLOCK_TIME_IS_VALID(time))
 	{
-		g_signal_emit_by_name(mess->gobj, "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
-//		g_signal_emit_by_name(G_OBJECT((mess->visualizer_object->gobj).obj), "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
+		g_signal_emit_by_name(G_OBJECT((mess->visualizer_object->gobj).obj), "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
 	}
 
-//	Py_DECREF(mess->visualizer_object);
-	g_object_unref(mess->gobj);
+	Py_DECREF(mess->visualizer_object);
 	g_free(mess);
 
 	return TRUE;
@@ -106,26 +102,21 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 			GstStructure *caps_structure = gst_caps_get_structure(caps, 0);
 			gst_structure_get_int(caps_structure, "rate", &(mess->rate));
 			gst_object_unref(caps);
+//			mess->rate = 44100;
 
 			const GValue *list = gst_structure_get_value(message_structure, "magnitude");
-			mess->magnitudes = list;
 
-/*			int i;
+			int i;
 			mess->magnitudes = PyList_New(mess->bands);
 			for (i=0; i < (mess->bands); i++)
 			{
 				const GValue *value = gst_value_list_get_value(list, i);
 				gfloat f = g_value_get_float(value);
 				PyList_SetItem(mess->magnitudes, i, Py_BuildValue("f", f));
-			}*/
+			}
 			
-//			Py_INCREF(visualizer_object);
-//			mess->visualizer_object = visualizer_object;
-
-			GObject *gobj = (visualizer_object->gobj).obj;
-			g_object_ref(gobj);
-			mess->gobj = gobj;
-
+			Py_INCREF(visualizer_object);
+			mess->visualizer_object = visualizer_object;
 			gst_clock_id_wait_async(clock_id, delayed_spectrum_update, mess);
 
 			gst_clock_id_unref(clock_id);
@@ -202,10 +193,10 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	// add "magnitudes-available" signal to "base" type
 	// (see http://www.pygtk.org/articles/subclassing-gobject/sub-classing-gobject-in-python.htm, "Creating your own signals")
 	PyObject *type_int = PyObject_GetAttrString(gobject_module, "TYPE_INT");
-	PyObject *type_object = PyObject_GetAttrString(gobject_module, "TYPE_OBJECT");
-	PyObject *signal_args = PyTuple_Pack(4, type_int, type_int, type_int, type_object);
+	PyObject *type_pyobject = PyObject_GetAttrString(gobject_module, "TYPE_PYOBJECT");
+	PyObject *signal_args = PyTuple_Pack(4, type_int, type_int, type_int, type_pyobject);
 	Py_DECREF(type_int);
-	Py_DECREF(type_object);
+	Py_DECREF(type_pyobject);
 
 	PyObject *type_none = PyObject_GetAttrString(gobject_module, "TYPE_NONE");
 	PyObject *run_first = PyObject_GetAttrString(gobject_module, "SIGNAL_RUN_FIRST");
