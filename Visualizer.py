@@ -55,6 +55,7 @@ class Base2(gtk.DrawingArea):
 		self.visbase.connect("magnitudes_available", self.on_magnitudes)
 
 	def on_magnitudes(self,visbase,bands,rate,threshold,magnitudes):
+#		print bands,rate,threshold,magnitudes
 		bands_array = numpy.arange(bands)
 		frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
 		self.semitones = 12. * numpy.log2(frequencies/REFERENCE_FREQUENCY)

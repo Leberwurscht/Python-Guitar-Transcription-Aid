@@ -32,11 +32,14 @@ static PyMemberDef base_members[] = {
 
 // struct for delaying messages
 typedef struct {
-	base *visualizer_object;
+//	base *visualizer_object;
+	GObject *gobj; // gobject on which to emit the signal
 	guint bands;
 	gint rate;
 	gint threshold;
 	PyObject *magnitudes;
+//	GObject *magnitudes;
+//	const GValue *magnitudes;
 } spectrum_message;
 
 // fire signals for delayed spectrum messages
@@ -46,10 +49,16 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 
 	if (GST_CLOCK_TIME_IS_VALID(time))
 	{
-		g_signal_emit_by_name(G_OBJECT((mess->visualizer_object->gobj).obj), "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
+//		g_print(mess->gobj);
+//		g_print(mess->magnitudes);
+//		g_assert(mess->gobj != NULL);
+//		g_assert(mess->magnitudes != NULL);
+		g_signal_emit_by_name(mess->gobj, "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
+//		g_signal_emit_by_name(G_OBJECT((mess->visualizer_object->gobj).obj), "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
 	}
 
-	Py_DECREF(mess->visualizer_object);
+//	Py_DECREF(mess->visualizer_object);
+	g_object_unref(mess->gobj);
 	g_free(mess);
 
 	return TRUE;
@@ -101,10 +110,14 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 
 			GstStructure *caps_structure = gst_caps_get_structure(caps, 0);
 			gst_structure_get_int(caps_structure, "rate", &(mess->rate));
-			gst_object_unref(caps);
-//			mess->rate = 44100;
+			gst_caps_unref(caps);
 
 			const GValue *list = gst_structure_get_value(message_structure, "magnitude");
+//			gst_object_ref(G_OBJECT(message_structure));
+//			gst_message_ref(message);
+//			mess->magnitudes = (GObject *)message;
+
+			PyGILState_STATE gstate = PyGILState_Ensure();
 
 			int i;
 			mess->magnitudes = PyList_New(mess->bands);
@@ -114,9 +127,17 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 				gfloat f = g_value_get_float(value);
 				PyList_SetItem(mess->magnitudes, i, Py_BuildValue("f", f));
 			}
+
+			PyGILState_Release(gstate);
 			
-			Py_INCREF(visualizer_object);
-			mess->visualizer_object = visualizer_object;
+//			Py_INCREF(visualizer_object);
+//			mess->visualizer_object = visualizer_object;
+
+			GObject *gobj = (visualizer_object->gobj).obj;
+			g_assert(gobj != NULL);
+			g_object_ref(gobj);
+			mess->gobj = gobj;
+
 			gst_clock_id_wait_async(clock_id, delayed_spectrum_update, mess);
 
 			gst_clock_id_unref(clock_id);
