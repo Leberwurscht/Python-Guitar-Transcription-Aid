@@ -28,7 +28,7 @@ class Transcribe:
 		self.timeline.show_all()
 
 		# create fretboard
-#		self.fretboard = Visualizer.SingleString(self.pipeline.spectrum, self.pipeline, tune=-5)
+#		self.fretboard = Visualizer.SingleString(self.pipeline.spectrum, self.pipeline, tune=-29)
 		self.fretboard = Visualizer.Fretboard(self.pipeline.spectrum, self.pipeline)
 #		self.fretboard.connect_to_bus(bus)
 		self.builder.get_object("vbox").pack_start(self.fretboard,expand=False)

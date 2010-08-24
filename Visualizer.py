@@ -67,9 +67,9 @@ class Base2(gtk.DrawingArea):
 		
 	def draw(self,widget,event): pass
 
-class Fretboard(Base):
+class Fretboard(Base2):
 	def __init__(self, spectrum_element,pipeline,**kwargs):
-		Base.__init__(self, spectrum_element,pipeline)
+		Base2.__init__(self, spectrum_element,pipeline)
 
 		if "strings" in kwargs: self.strings = kwargs["strings"]
 		else: self.strings = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
