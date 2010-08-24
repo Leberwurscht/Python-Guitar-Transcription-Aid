@@ -87,7 +87,7 @@ class Fretboard(Base2):
 		else: self.paddingx = 5
 
 		if "paddingy" in kwargs: self.paddingy = kwargs["paddingy"]
-		else: self.paddingy = 5
+		else: self.paddingy = 7
 
 		if "magnitude_max" in kwargs: self.magnitude_max = kwargs["magnitude_max"]
 		else: self.magnitude_max = 0
@@ -97,6 +97,9 @@ class Fretboard(Base2):
 
 		if "markers" in kwargs: self.markers = kwargs["markers"]
 		else: self.markers = [5,7,9]
+
+		if "capo" in kwargs: self.capo = kwargs["capo"]
+		else: self.capo = 0
 
 		markerspace = self.rectheight/2 + self.markers_radius
 
@@ -146,6 +149,14 @@ class Fretboard(Base2):
 			context.set_source_rgb(.2,.2,.2)
 			context.arc(self.paddingx + self.rectwidth*(i+0.5), markersy, self.markers_radius, 0, 2 * numpy.pi)
 			context.fill()
+
+		if self.capo:
+			context.set_source_rgb (.4,0,0)
+			context.set_line_width(self.rectwidth/3)
+			context.set_line_cap(cairo.LINE_CAP_ROUND)
+			context.move_to(self.paddingx+self.rectwidth*(self.capo+.3),self.paddingy)
+			context.line_to(self.paddingx+self.rectwidth*(self.capo+.3),self.paddingy+self.rectheight*len(self.strings))
+			context.stroke()
 
 		context.set_source_rgb (.8,0,0)
 		context.set_line_width(self.rectwidth/4)
