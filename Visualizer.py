@@ -54,11 +54,14 @@ def integrate(frequency, power, semitone, overtone=0):
 	return r
 
 class Base(gtk.DrawingArea):
-	def __init__(self, spectrum_element,pipeline):
+	def __init__(self,pipeline,spectrum_element=False):
 		gtk.DrawingArea.__init__(self)
 		self.connect("expose_event", self.draw)
 
-		self.spectrum_element = spectrum_element
+		if spectrum_element:
+			self.spectrum_element = spectrum_element
+		else:
+			self.spectrum_element = pipeline.get_by_name('spectrum')
 #		self.spectrum_element.get_pad("sink").connect("notify", self.on_notify)
 		self.pipeline=pipeline
 		bus=self.pipeline.get_bus()
@@ -93,13 +96,16 @@ class Base(gtk.DrawingArea):
 		pass
 
 class Base2(gtk.DrawingArea):
-	def __init__(self,spectrum_element,pipeline):
+	def __init__(self,pipeline,spectrum_element=False):
 		gtk.DrawingArea.__init__(self)
 		self.connect("expose_event", self.draw)
-		self.spectrum_element = spectrum_element
 		self.pipeline=pipeline
+		if spectrum_element:
+			self.spectrum_element = spectrum_element
+		else:
+			self.spectrum_element = pipeline.get_by_name('spectrum')
 
-		self.visbase = spectrumvisualizer.base(spectrum_element, pipeline)
+		self.visbase = spectrumvisualizer.base(self.spectrum_element, pipeline)
 		self.visbase.connect("magnitudes_available", self.on_magnitudes)
 
 	def on_magnitudes(self,visbase,bands,rate,threshold,magnitudes):
@@ -117,8 +123,8 @@ class Base2(gtk.DrawingArea):
 	def draw(self,widget,event): pass
 
 class Fretboard(Base2):
-	def __init__(self, spectrum_element,pipeline,**kwargs):
-		Base2.__init__(self, spectrum_element,pipeline)
+	def __init__(self,*args,**kwargs):
+		Base2.__init__(self,*args)
 
 		if "strings" in kwargs: self.strings = kwargs["strings"]
 		else: self.strings = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
@@ -218,7 +224,7 @@ class Fretboard(Base2):
 
 class SingleString(Fretboard):
 	""" Displays spectrum on one string, but also for overtones. """
-	def __init__(self, spectrum_element,pipeline,**kwargs):
+	def __init__(self,*args,**kwargs):
 		if "tune" in kwargs: self.tune = kwargs["tune"]
 		else: self.tune = -5
 
@@ -232,7 +238,7 @@ class SingleString(Fretboard):
 		for i in xrange(1,self.overtones+2):
 			kwargs["strings"][i] = self.tune + 12.*numpy.log2(i)
 
-		Fretboard.__init__(self, spectrum_element,pipeline,**kwargs)
+		Fretboard.__init__(self,*args,**kwargs)
 
 		markerspace = self.rectheight/2 + self.markers_radius
 		self.sumy = len(self.strings)*self.rectheight + markerspace + 2*self.paddingy

@@ -26,7 +26,7 @@ class Pipeline(gst.Pipeline):
 		self.convert.link(scaletempo)
 
 		# spectrum
-		self.spectrum = gst.element_factory_make("spectrum")
+		self.spectrum = gst.element_factory_make("spectrum","spectrum")
 		self.add(self.spectrum)
 		scaletempo.link(self.spectrum)
 
