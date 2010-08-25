@@ -32,14 +32,11 @@ static PyMemberDef base_members[] = {
 
 // struct for delaying messages
 typedef struct {
-//	base *visualizer_object;
 	GObject *gobj; // gobject on which to emit the signal
 	guint bands;
 	gint rate;
 	gint threshold;
 	PyObject *magnitudes;
-//	GObject *magnitudes;
-//	const GValue *magnitudes;
 } spectrum_message;
 
 // fire signals for delayed spectrum messages
@@ -49,15 +46,9 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 
 	if (GST_CLOCK_TIME_IS_VALID(time))
 	{
-//		g_print(mess->gobj);
-//		g_print(mess->magnitudes);
-//		g_assert(mess->gobj != NULL);
-//		g_assert(mess->magnitudes != NULL);
 		g_signal_emit_by_name(mess->gobj, "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
-//		g_signal_emit_by_name(G_OBJECT((mess->visualizer_object->gobj).obj), "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
 	}
 
-//	Py_DECREF(mess->visualizer_object);
 	g_object_unref(mess->gobj);
 	g_free(mess);
 
@@ -102,8 +93,10 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 			GstClockID clock_id = gst_clock_new_single_shot_id(visualizer_object->sync_clock, basetime+waittime);
 			spectrum_message *mess = g_malloc(sizeof(spectrum_message));
 
+			// set bands and threshold
 			g_object_get(message_element, "bands", &(mess->bands), "threshold", &(mess->threshold), NULL);
 
+			// set rate
 			GstPad *sink = gst_element_get_static_pad(GST_ELEMENT(visualizer_object->spectrum_element->obj), "sink");
 			GstCaps *caps = gst_pad_get_negotiated_caps(sink);
 			gst_object_unref(sink);
@@ -112,10 +105,8 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 			gst_structure_get_int(caps_structure, "rate", &(mess->rate));
 			gst_caps_unref(caps);
 
+			// set magnitudes
 			const GValue *list = gst_structure_get_value(message_structure, "magnitude");
-//			gst_object_ref(G_OBJECT(message_structure));
-//			gst_message_ref(message);
-//			mess->magnitudes = (GObject *)message;
 
 			PyGILState_STATE gstate = PyGILState_Ensure();
 
@@ -129,15 +120,14 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 			}
 
 			PyGILState_Release(gstate);
-			
-//			Py_INCREF(visualizer_object);
-//			mess->visualizer_object = visualizer_object;
 
+			// set gobj
 			GObject *gobj = (visualizer_object->gobj).obj;
 			g_assert(gobj != NULL);
 			g_object_ref(gobj);
 			mess->gobj = gobj;
 
+			// delay message
 			gst_clock_id_wait_async(clock_id, delayed_spectrum_update, mess);
 
 			gst_clock_id_unref(clock_id);
@@ -176,18 +166,6 @@ static int base_init(base *self, PyObject *args, PyObject *kwds)
 	return 0;
 }
 
-//static void base_dealloc(base *self)
-//{
-//	delete self->boostgraph;
-//	Py_XDECREF(self->spectrum_element);
-//	Py_XDECREF(self->pipeline);
-//	self->ob_type->tp_free((PyObject*)self);
-//}
-
-//static PyMethodDef base_methods[] = {
-//	{NULL}
-//};
-
 PyMODINIT_FUNC initspectrumvisualizer(void)
 {
 	init_pygobject();
@@ -204,10 +182,6 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	baseType.tp_init = (initproc)base_init;
 	baseType.tp_members = base_members;
 	baseType.tp_doc = "spectrum visualizer base object";
-
-//	baseType.tp_new = PyType_GenericNew;
-//	baseType.tp_dealloc = (destructor)base_dealloc;
-//	baseType.tp_methods = base_methods;
 
 	if (PyType_Ready(&baseType)<0) return;
 

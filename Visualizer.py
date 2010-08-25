@@ -5,6 +5,54 @@ import spectrumvisualizer
 
 REFERENCE_FREQUENCY = 440
 
+def integrate(frequency, power, semitone, overtone=0):
+	center_frequency = REFERENCE_FREQUENCY * 1.0594630943592953**semitone
+	center_frequency *= overtone+1
+
+	# range is one semitone, so one quartertone up and down
+	lower_limit = center_frequency * 0.97153194115360586
+	upper_limit = center_frequency * 1.0293022366434921
+
+	### interpolate power(lower_limit) and power(upper_limit)
+	lower_right_index = numpy.min(numpy.nonzero(frequency > lower_limit))
+	lower_left_index = lower_right_index-1
+
+	lower_left = frequency[lower_left_index]
+	lower_left_power = power[lower_left_index]
+
+	lower_right = frequency[lower_right_index]
+	lower_right_power = power[lower_right_index]
+
+	upper_right_index = numpy.min(numpy.nonzero(frequency > upper_limit))
+	upper_left_index = upper_right_index-1
+
+	upper_left = frequency[upper_left_index]
+	upper_left_power = power[upper_left_index]
+
+	upper_right = frequency[upper_right_index]
+	upper_right_power = power[upper_right_index]
+
+	lower_limit_interpolated = (lower_right-lower_limit)*lower_left_power + (lower_limit-lower_left)*lower_right_power
+	lower_limit_interpolated /= lower_right-lower_left
+
+	upper_limit_interpolated = (upper_right-upper_limit)*upper_left_power + (upper_limit-upper_left)*upper_right_power
+	upper_limit_interpolated /= upper_right-upper_left
+
+	# build frequency, power for (lower_limit, upper_limit) range
+	f = [lower_limit]
+	p = [lower_limit_interpolated]
+
+	for i in xrange(lower_right_index, upper_right_index):
+		f.append(frequency[i])
+		p.append(power[i])
+
+	f.append(upper_limit)
+	p.append(upper_limit_interpolated)
+
+	r = numpy.trapz(p, f)
+
+	return r
+
 class Base(gtk.DrawingArea):
 	def __init__(self, spectrum_element,pipeline):
 		gtk.DrawingArea.__init__(self)
@@ -30,8 +78,8 @@ class Base(gtk.DrawingArea):
 			rate = message.src.get_pad("sink").get_negotiated_caps()[0]["rate"]
 
 			bands_array = numpy.arange(bands)
-			frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
-			self.semitones = 12. * numpy.log2(frequencies/REFERENCE_FREQUENCY)
+			self.frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
+			self.semitones = 12. * numpy.log2(self.frequencies/REFERENCE_FREQUENCY)
 
 			self.magnitudes = numpy.array(message.structure["magnitude"])
 
@@ -57,8 +105,8 @@ class Base2(gtk.DrawingArea):
 	def on_magnitudes(self,visbase,bands,rate,threshold,magnitudes):
 #		print bands,rate,threshold,magnitudes
 		bands_array = numpy.arange(bands)
-		frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
-		self.semitones = 12. * numpy.log2(frequencies/REFERENCE_FREQUENCY)
+		self.frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
+		self.semitones = 12. * numpy.log2(self.frequencies/REFERENCE_FREQUENCY)
 
 		self.magnitudes = numpy.array(magnitudes)
 
@@ -175,7 +223,7 @@ class SingleString(Fretboard):
 		else: self.tune = -5
 
 		if "overtones" in kwargs: self.overtones = kwargs["overtones"]
-		else: self.overtones = 10
+		else: self.overtones = 5
 
 		if "rectheight" in kwargs: self.rectheight = kwargs["rectheight"]
 		else: self.rectheight = 10
@@ -185,3 +233,61 @@ class SingleString(Fretboard):
 			kwargs["strings"][i] = self.tune + 12.*numpy.log2(i)
 
 		Fretboard.__init__(self, spectrum_element,pipeline,**kwargs)
+
+		markerspace = self.rectheight/2 + self.markers_radius
+		self.sumy = len(self.strings)*self.rectheight + markerspace + 2*self.paddingy
+		self.set_size_request((self.frets+1)*self.rectwidth + 2*self.paddingx, self.sumy + self.rectheight + self.paddingy)
+
+	def draw(self, widget, event):
+		Fretboard.draw(self, widget, event)
+
+		if not hasattr(self,"magnitudes"): return True
+
+#		power = 1.26**self.magnitudes # from dB to power
+#		power = self.magnitudes
+
+		brightness_slope = - 1.0 / (self.magnitude_max - self.magnitude_min)
+		brightness_const = 1.0*self.magnitude_max / (self.magnitude_max - self.magnitude_min)
+
+		brightness = brightness_slope * self.magnitudes + brightness_const
+		brightness = 1.-numpy.clip(brightness, 0.,1.)
+		power = brightness
+
+		context = widget.window.cairo_create()
+
+		for fret in xrange(self.frets+1):
+			context.rectangle(self.paddingx+fret*self.rectwidth, self.sumy, self.rectwidth, self.rectheight)
+
+			# calculate total power, including overtones
+			t=0
+			for i in xrange(self.overtones+1):
+				t += integrate(self.frequencies, power, self.tune+fret, i)
+
+			# convert to dB
+			dB = 4.3269116591383208 * numpy.log(t)
+			print fret,t,dB
+
+			# calculate brightness
+#			mag_max = self.magnitude_max * self.overtones/2.
+			## in dB:
+#			minimum=4.3269116591383208 * numpy.log(1.26**self.magnitude_min * (self.overtones+1))
+#			maximum=4.3269116591383208 * numpy.log(1.26**self.magnitude_max * (self.overtones+1)*.6)
+			## in power:
+#			minimum = 1.26**self.magnitude_min * (self.overtones+1)
+#			maximum = 1.26**self.magnitude_max * (self.overtones+1)*.05
+#			maximum = 0.001
+#			print minimum, maximum
+			minimum = 0
+			maximum = 5
+			brightness_slope = - 1.0 / (maximum - minimum)
+			brightness_const = 1.0*maximum / (maximum - minimum)
+
+			brightness = brightness_slope * t + brightness_const
+			brightness = max(0.,min(1.,brightness))
+			
+			context.set_source_rgb(brightness,brightness,brightness)
+			context.fill_preserve()
+
+			context.set_line_width(3)
+			context.set_source_rgb(0,0,0)
+			context.stroke()
