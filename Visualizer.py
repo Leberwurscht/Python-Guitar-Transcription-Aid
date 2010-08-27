@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import gtk, numpy, cairo
-import spectrumvisualizer
+import spectrumvisualizer, peakdetector
 
 REFERENCE_FREQUENCY = 440
 
@@ -165,6 +165,8 @@ class Fretboard(Base2):
 	def draw(self, widget, event):
 		context = widget.window.cairo_create()
 
+		brightness_slope=0
+		brightness_const=0
 		if hasattr(self,"magnitudes"):
 			pattern = cairo.LinearGradient(self.semitones[0]*self.rectwidth, 0, self.semitones[-1]*self.rectwidth, 0)
 
@@ -219,6 +221,24 @@ class Fretboard(Base2):
 		context.move_to(self.paddingx+self.rectwidth*.3,self.paddingy)
 		context.line_to(self.paddingx+self.rectwidth*.3,self.paddingy+self.rectheight*len(self.strings))
 		context.stroke()
+
+		if hasattr(self,"magnitudes"):
+			power = peakdetector.level_to_power(self.magnitudes)
+			st = peakdetector.get_tones(self.frequencies, power)
+			if not st:return True
+			print st
+			for semitone,power in st.iteritems():
+				for string,stringtone in self.strings.iteritems():
+					fret = semitone-stringtone
+					if fret<0 or fret>self.frets: continue
+					print string,fret
+					context.rectangle(self.paddingx+fret*self.rectwidth, self.paddingy+self.rectheight*(string-1), self.rectwidth, self.rectheight)
+
+					level=peakdetector.power_to_level(power)
+					brightness = brightness_slope * level + brightness_const
+					brightness = max(0.,min(1.,brightness))
+					context.set_source_rgb(brightness,0,0)
+					context.fill()
 
 		return True
 

@@ -7,7 +7,6 @@
     <child>
       <object class="GtkVBox" id="vbox">
         <property name="visible">True</property>
-        <property name="orientation">vertical</property>
         <child>
           <object class="GtkMenuBar" id="menubar1">
             <property name="visible">True</property>
@@ -205,6 +204,19 @@
                 <property name="use_underline">True</property>
                 <property name="icon_name">media-playback-stop</property>
                 <signal name="clicked" handler="stop"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="analyze">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Analyze</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">audio-x-generic</property>
+                <signal name="clicked" handler="analyze"/>
               </object>
               <packing>
                 <property name="expand">False</property>

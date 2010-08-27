@@ -15,7 +15,8 @@ class Transcribe:
 		self.builder.add_from_file("gui.glade")
 		self.builder.get_object("rate").set_value(100)
 
-		# create pipeline
+		# create pipelines
+		self.appsinkpipeline = Pipeline.AppSinkPipeline(sys.argv[1])
 #		self.pipeline = Pipeline.Pipeline("/home/maxi/Musik/Audio/jamendo_track_401871.ogg")
 		self.pipeline = Pipeline.Pipeline(sys.argv[1])
 		bus = self.pipeline.get_bus()
@@ -28,8 +29,8 @@ class Transcribe:
 		self.timeline.show_all()
 
 		# create fretboard
-		self.fretboard = Visualizer.SingleString(self.pipeline, tune=-5, capo=2)
-#		self.fretboard = Visualizer.Fretboard(self.pipeline, capo=2)
+#		self.fretboard = Visualizer.SingleString(self.pipeline, tune=-5, capo=2)
+		self.fretboard = Visualizer.Fretboard(self.pipeline, capo=2)
 #		self.fretboard.connect_to_bus(bus)
 		self.builder.get_object("vbox").pack_start(self.fretboard,expand=False)
 		self.fretboard.show_all()
@@ -73,6 +74,12 @@ class Transcribe:
 		else:
 			rate = self.builder.get_object("rate").get_value()/100.
 			self.pipeline.play()
+
+	def analyze(self, widget):
+		marker = self.timeline.get_marker()
+
+		if marker:
+			self.appsinkpipeline.get_raw(marker[0],marker[0]+marker[1])
 
 	def stop(self,widget):
 		self.pipeline.pause()
