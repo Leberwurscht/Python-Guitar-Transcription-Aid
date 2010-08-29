@@ -80,23 +80,56 @@ class Transcribe:
 			self.pipeline.play()
 
 	def analyze(self, widget):
+		MAX_SAMPLES = 8192
 		marker = self.timeline.get_marker()
 
 		if marker:
 			data = self.appsinkpipeline.get_raw(marker[0],marker[0]+marker[1])
 			rate = self.appsinkpipeline.caps[0]["rate"]
+
+			if not len(data)>0:
+				print "NO DATA"
+				return
+
+			samples = min(MAX_SAMPLES, len(data))
+			print samples
 #			a = str(buf)
 #			a = array.array("f", a)
 #			print len(a)
 
-			frq, power = Analyze.get_power(data[:8192], rate)
-			print "LEN",len(power)
+			chunks = len(data)/samples
+
+			# get average of power over time
+			power = 0.
+#			int(.5*(x-1)*samples)+samples < len(data)
+#			int(.5(x-1)*samples) < len(data)-samples
+#			fall1: samples gerade
+#				<=> x*samples < 2*len(data)-samples
+#				<=> x < 2*len(data)/samples-1 = len(data) / int(samples/2) - 1
+#				=> x = 2*len(data)/samples-2 = int( 2.*( len(data)-1 )/samples )
+#			fall2: samples ung
+#				<=> (x-1)*(samples-1) < 2*len(data)-2*samples
+#				<=> x*(samples-1) < 2*len(data) - samples -1
+#				<=> x < (2*len(data) - samples - 1) / (samples-1) = 
+#						= 2*len(data) / (samples-1) -1 =
+#						= len(data) / int(samples/2) - 1
+			for i in xrange( len(data) / int(samples/2.) - 1 ):
+				shift = int(0.5*i*samples)
+				d = data[ shift : shift+samples ]
+				power += Analyze.get_power(data[ shift : shift+samples ])
+
+			power /= chunks
+
+			frq = Analyze.get_frq(len(power), rate)
+			
+			print "SAMPLES",samples,"CHUNKS",chunks
 
 			self.fretboard.frequencies = frq
 			self.fretboard.semitones = 12. * numpy.log2(frq/440.)
-			self.fretboard.magnitudes = 10.*numpy.log10(power / 8192.**2)
-			self.fretboard.magnitude_max = 5.
-			self.fretboard.magnitude_min = -5.
+			self.fretboard.magnitudes = power
+#			self.fretboard.magnitudes = 10.*numpy.log10(power / 8192.**2)
+			self.fretboard.magnitude_max = 500
+			self.fretboard.magnitude_min = 0
 			self.fretboard.queue_draw()
 
 			w = Analyze.Analyze()
