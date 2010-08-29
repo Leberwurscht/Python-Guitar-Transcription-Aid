@@ -79,7 +79,7 @@ class Transcribe:
 		marker = self.timeline.get_marker()
 
 		if marker:
-			self.appsinkpipeline.get_raw2(marker[0],marker[0]+marker[1])
+			self.appsinkpipeline.get_raw(marker[0],marker[0]+marker[1])
 
 	def stop(self,widget):
 		self.pipeline.pause()

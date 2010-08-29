@@ -40,31 +40,12 @@ class AppSinkPipeline(gst.Pipeline):
 		compatible_pad = self.convert.get_compatible_pad(pad)
 		pad.link(compatible_pad)
 
-	def new_buffer(*args):
-		print args
-
-	def eos(*args):
-		self.finished = True
-		self.mainloop.quit()
-
-	def get_raw2(self,start,stop):
-		print start, stop
-		self.set_state(gst.STATE_PAUSED)
-		self.get_state()
-
-		self.seek(1.0,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
-		self.get_state()
-
-		self.set_state(gst.STATE_PLAYING)
-		self.get_state()
-
-		while True:
-			try:
-				print "PULL"
-				buf = self.sink.emit('pull-buffer')
-				if not buf: return
-				print "PULLED",len(buf)
-			except Exception,e: print "Error",e
+#	def new_buffer(*args):
+#		print args
+#
+#	def eos(*args):
+#		self.finished = True
+#		self.mainloop.quit()
 
 	def get_raw(self,start,stop):
 		print start, stop
@@ -74,26 +55,50 @@ class AppSinkPipeline(gst.Pipeline):
 		self.seek(1.0,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
 		self.get_state()
 
-		self.finished = False
 		self.set_state(gst.STATE_PLAYING)
 		self.get_state()
 
-		print "1"
-		if not self.finished: self.mainloop.run()
-		print "2"
+		buf = gst.Buffer()
 
-#		while True:
-#			try:
-#				buf = self.sink.emit('pull-buffer')
-#			except SystemError, e:
-#				# it's probably a bug that emits triggers a SystemError
-#				print 'SystemError', e
-#				break
+		while True:
+			try:
+				print "PULL"
+				b = self.sink.emit('pull-buffer')
+				if not buf: break
+				print "PULLED",len(b)
+				buf = buf.merge(b)
+			except Exception,e: print "Error",e
+
+		print "DONE",len(buf)
+
+#	def get_raw(self,start,stop):
+#		print start, stop
+#		self.set_state(gst.STATE_PAUSED)
+#		self.get_state()
 #
-#			print buf
-
-		self.set_state(gst.STATE_PAUSED)
-		self.get_state()
+#		self.seek(1.0,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
+#		self.get_state()
+#
+#		self.finished = False
+#		self.set_state(gst.STATE_PLAYING)
+#		self.get_state()
+#
+#		print "1"
+#		if not self.finished: self.mainloop.run()
+#		print "2"
+#
+#		while True:
+##			try:
+##				buf = self.sink.emit('pull-buffer')
+##			except SystemError, e:
+##				# it's probably a bug that emits triggers a SystemError
+##				print 'SystemError', e
+##				break
+##
+##			print buf
+#
+#		self.set_state(gst.STATE_PAUSED)
+#		self.get_state()
 
 class Pipeline(gst.Pipeline):
 	def __init__(self,filename=None, bands=4096):
