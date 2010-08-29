@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import gst, gobject
+import gst, gobject, array
 
 class AppSinkPipeline(gst.Pipeline):
 	def __init__(self,filename):
@@ -23,6 +23,18 @@ class AppSinkPipeline(gst.Pipeline):
 		self.convert = gst.element_factory_make("audioconvert")
 		self.add(self.convert)
 
+		# audioresample
+		resample = gst.element_factory_make("audioresample")
+		self.add(resample)
+		self.convert.link(resample)
+
+		# capsfilter
+		capsfilter = gst.element_factory_make("capsfilter")
+		self.caps = gst.caps_from_string('audio/x-raw-float, rate=44100, channels=1, width=32')
+		capsfilter.set_property("caps", self.caps)
+		self.add(capsfilter)
+		resample.link(capsfilter)
+
 		# sink
 #		self.sink = gst.element_factory_make("gconfaudiosink")
 		self.sink = gst.element_factory_make("appsink")
@@ -34,7 +46,7 @@ class AppSinkPipeline(gst.Pipeline):
 #		bus.add_signal_watch()
 #		bus.connect("message::eos", self.eos)
 		self.add(self.sink)
-		self.convert.link(self.sink)
+		capsfilter.link(self.sink)
 
 	def on_decoded_pad(self, bin, pad, last):
 		compatible_pad = self.convert.get_compatible_pad(pad)
@@ -48,7 +60,7 @@ class AppSinkPipeline(gst.Pipeline):
 #		self.mainloop.quit()
 
 	def get_raw(self,start,stop):
-		print start, stop
+		#print start, stop
 		self.set_state(gst.STATE_PAUSED)
 		self.get_state()
 
@@ -59,17 +71,22 @@ class AppSinkPipeline(gst.Pipeline):
 		self.get_state()
 
 		buf = gst.Buffer()
+		buf.set_caps(self.caps)
 
 		while True:
 			try:
-				print "PULL"
+#				print "PULL"
 				b = self.sink.emit('pull-buffer')
-				if not buf: break
-				print "PULLED",len(b)
+				if not b: break
+#				print "PULLED",len(b)
+#				print b.get_caps()
 				buf = buf.merge(b)
 			except Exception,e: print "Error",e
 
-		print "DONE",len(buf)
+#		print "DONE",len(buf)
+		r = array.array("f", str(buf))
+
+		return r
 
 #	def get_raw(self,start,stop):
 #		print start, stop

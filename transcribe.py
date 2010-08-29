@@ -8,6 +8,10 @@ import Pipeline
 import Timeline
 import sys
 
+#import numpy,array,struct
+import numpy
+import Analyze
+
 class Transcribe:
 	def __init__(self):
 		# create gui
@@ -79,7 +83,25 @@ class Transcribe:
 		marker = self.timeline.get_marker()
 
 		if marker:
-			self.appsinkpipeline.get_raw(marker[0],marker[0]+marker[1])
+			data = self.appsinkpipeline.get_raw(marker[0],marker[0]+marker[1])
+			rate = self.appsinkpipeline.caps[0]["rate"]
+#			a = str(buf)
+#			a = array.array("f", a)
+#			print len(a)
+
+			frq, power = Analyze.get_power(data[:8192], rate)
+			print "LEN",len(power)
+
+			self.fretboard.frequencies = frq
+			self.fretboard.semitones = 12. * numpy.log2(frq/440.)
+			self.fretboard.magnitudes = 10.*numpy.log10(power / 8192.**2)
+			self.fretboard.magnitude_max = 5.
+			self.fretboard.magnitude_min = -5.
+			self.fretboard.queue_draw()
+
+			w = Analyze.Analyze()
+			w.show_all()
+			w.plot_spectrum(frq, power)
 
 	def stop(self,widget):
 		self.pipeline.pause()

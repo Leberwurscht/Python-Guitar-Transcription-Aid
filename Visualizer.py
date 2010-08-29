@@ -168,6 +168,7 @@ class Fretboard(Base2):
 		brightness_slope=0
 		brightness_const=0
 		if hasattr(self,"magnitudes"):
+			print "maglen",len(self.magnitudes)
 			pattern = cairo.LinearGradient(self.semitones[0]*self.rectwidth, 0, self.semitones[-1]*self.rectwidth, 0)
 
 			semitonerange = self.semitones[-1]-self.semitones[0]
@@ -222,6 +223,7 @@ class Fretboard(Base2):
 		context.line_to(self.paddingx+self.rectwidth*.3,self.paddingy+self.rectheight*len(self.strings))
 		context.stroke()
 
+		return True
 		if hasattr(self,"magnitudes"):
 			power = peakdetector.level_to_power(self.magnitudes)
 			st = peakdetector.get_tones(self.frequencies, power)
