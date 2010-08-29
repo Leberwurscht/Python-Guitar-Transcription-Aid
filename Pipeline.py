@@ -6,10 +6,11 @@ class AppSinkPipeline(gst.Pipeline):
 	def __init__(self,filename):
 		gst.Pipeline.__init__(self)
 
-		self.mainloop = gobject.MainLoop()
+#		self.mainloop = gobject.MainLoop()
 
 		# filesrc
 		self.filesrc = gst.element_factory_make("filesrc")
+		self.filesrc.set_property("location",filename)
 		self.add(self.filesrc)
 
 		# decodebin
@@ -23,15 +24,15 @@ class AppSinkPipeline(gst.Pipeline):
 		self.add(self.convert)
 
 		# sink
-		self.sink = gst.element_factory_make("gconfaudiosink")
-#		self.sink = gst.element_factory_make("appsink")
-##		self.sink.set_property("sync", False)
+#		self.sink = gst.element_factory_make("gconfaudiosink")
+		self.sink = gst.element_factory_make("appsink")
+		self.sink.set_property("sync", False)
 #		self.sink.set_property("emit-signals", True)
 #		self.sink.connect("new-buffer", self.new_buffer)
 #		self.sink.connect("eos", self.eos)
-		bus = self.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message::eos", self.eos)
+#		bus = self.get_bus()
+#		bus.add_signal_watch()
+#		bus.connect("message::eos", self.eos)
 		self.add(self.sink)
 		self.convert.link(self.sink)
 
@@ -45,6 +46,25 @@ class AppSinkPipeline(gst.Pipeline):
 	def eos(*args):
 		self.finished = True
 		self.mainloop.quit()
+
+	def get_raw2(self,start,stop):
+		print start, stop
+		self.set_state(gst.STATE_PAUSED)
+		self.get_state()
+
+		self.seek(1.0,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
+		self.get_state()
+
+		self.set_state(gst.STATE_PLAYING)
+		self.get_state()
+
+		while True:
+			try:
+				print "PULL"
+				buf = self.sink.emit('pull-buffer')
+				if not buf: return
+				print "PULLED",len(buf)
+			except Exception,e: print "Error",e
 
 	def get_raw(self,start,stop):
 		print start, stop

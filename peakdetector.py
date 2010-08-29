@@ -2,6 +2,7 @@
 
 import numpy, pylab, sys
 import peakdetect
+import scipy.ndimage.filters
 
 semitone_factor = 2**(1/12.)
 tones=['a','ais (german b)','b (german h)','c','cis','d','dis','e','f','fis','g','gis']
@@ -87,7 +88,7 @@ def get_tones(frq,power):
 	return st
 
 if __name__=="__main__":
-	f = open("spectrumgriff4.txt")
+	f = open("spectrumgriff2.txt")
 
 	frq = []
 	level = []
@@ -107,12 +108,24 @@ if __name__=="__main__":
 
 	power = level_to_power(level)
 
-	maxtab,mintab = peakdetect.peakdet(power, .000005, frq)
+	maxtab,mintab = peakdetect.mypeakdet(power, .000005, frq)
+
+	for st in xrange(-29,8):
+		f = semitone_factor**st * 440.
+		pylab.axvline(f, color="k")
 
 	print "max"
 	for i in maxtab:
 		print i
-		pylab.axvline(i[0])
+		pylab.axvline(i[0], color="r")
+
+	maxf=scipy.ndimage.filters.maximum_filter(power,size=3)
+	minf=scipy.ndimage.filters.minimum_filter(power,size=3)
+	pylab.plot(frq,maxf, color='g')
+	pylab.plot(frq,minf, color='g')
+	pylab.plot(frq, numpy.logical_and(maxf==power, maxf-minf>0.0001), color='g')
+#	print maxf==power 
+#	print maxf-minf > 0.0001
 
 	#print "min"
 	#for i in mintab:
@@ -174,5 +187,5 @@ if __name__=="__main__":
 			semitone = int(semitone)
 			print "Power",p,"Frq",f,tones[semitone]
 
-	pylab.plot(frq, power)
+	pylab.plot(frq, power,color="b")
 	pylab.show()

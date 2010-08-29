@@ -4,6 +4,24 @@
 import sys
 from numpy import NaN, Inf, arange, isscalar, asarray
 
+import numpy
+import scipy.ndimage
+
+def find_peaks(frq,power,max_window=3,min_window=3,height=0.0001):
+#	delta_frq = frq[1]-frq[0]
+#	delta_ind = fwhm/delta_frq
+#	maximum_filter(power,size=delta_ind)
+	max_filtered = scipy.ndimage.maximum_filter1d(power,size=max_window)
+	min_filtered = scipy.ndimage.minimum_filter1d(power,size=min_window)
+	maxima = numpy.logical_and(max_filtered==power, max_filtered-min_filtered>height)
+	maxima_indices = numpy.nonzero(maxima)[0]
+	return maxima_indices
+
+def mypeakdet(v,delta,x):
+	ind=find_peaks(x,v,3,3,delta)
+	print "ind",
+	return [(x[i],v[i]) for i in ind], []
+
 def peakdet(v, delta, x = None):
     """
     Converted from MATLAB script at http://billauer.co.il/peakdet.html
