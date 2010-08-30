@@ -4,6 +4,7 @@ import gtk, numpy, cairo
 import spectrumvisualizer, peakdetector
 
 REFERENCE_FREQUENCY = 440
+standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
 
 def integrate(frequency, power, semitone, overtone=0):
 	center_frequency = REFERENCE_FREQUENCY * 1.0594630943592953**semitone
@@ -53,47 +54,22 @@ def integrate(frequency, power, semitone, overtone=0):
 
 	return r
 
-class Base(gtk.DrawingArea):
-	def __init__(self,pipeline,spectrum_element=False):
-		gtk.DrawingArea.__init__(self)
-		self.connect("expose_event", self.draw)
+class VisualizerWindow(gtk.Window):
+	def __init__(self, vislist, title, visualizer):
+		gtk.Window.__init__(self)
+		self.visualizer = visualizer
+		self.vislist = vislist
+		self.vislist.append(self)
 
-		if spectrum_element:
-			self.spectrum_element = spectrum_element
-		else:
-			self.spectrum_element = pipeline.get_by_name('spectrum')
-#		self.spectrum_element.get_pad("sink").connect("notify", self.on_notify)
-		self.pipeline=pipeline
-		bus=self.pipeline.get_bus()
-		bus.add_signal_watch()
-		bus.connect("message::element", self.on_message)
+		self.set_title(title)
+		self.add(visualizer)
+		self.show_all()
 
-#	def connect_to_bus(self, bus):
-#		bus.add_signal_watch()
-#		bus.connect("message::element", self.on_message)
+		self.connect("delete-event", self.delete)
 
-	def on_notify(self, *args):
-		print args
-
-	def on_message(self, bus, message):
-		if message.src==self.spectrum_element:
-			bands = message.src.get_property("bands")
-			rate = message.src.get_pad("sink").get_negotiated_caps()[0]["rate"]
-
-			bands_array = numpy.arange(bands)
-			self.frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
-			self.semitones = 12. * numpy.log2(self.frequencies/REFERENCE_FREQUENCY)
-
-			self.magnitudes = numpy.array(message.structure["magnitude"])
-
-			self.magnitude_min = message.src.get_property("threshold")
-
-			self.queue_draw()
-
-		return True
-
-	def draw(self, widget, event):
-		pass
+	def delete(self, *args):
+		self.vislist.remove(self)
+		return False
 
 class Base2(gtk.DrawingArea):
 	def __init__(self,pipeline,spectrum_element=False):
@@ -122,12 +98,13 @@ class Base2(gtk.DrawingArea):
 		
 	def draw(self,widget,event): pass
 
-class Fretboard(Base2):
+class Fretboard(gtk.DrawingArea):
 	def __init__(self,*args,**kwargs):
-		Base2.__init__(self,*args)
+		gtk.DrawingArea.__init__(self,*args)
+		self.connect("expose_event", self.draw)
 
 		if "strings" in kwargs: self.strings = kwargs["strings"]
-		else: self.strings = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
+		else: self.strings = standard_tuning
 
 		if "frets" in kwargs: self.frets = kwargs["frets"]
 		else: self.frets = 12
@@ -165,22 +142,14 @@ class Fretboard(Base2):
 	def draw(self, widget, event):
 		context = widget.window.cairo_create()
 
-		brightness_slope=0
-		brightness_const=0
-		if hasattr(self,"magnitudes"):
-			print "maglen",len(self.magnitudes)
+		if hasattr(self,"semitones"):
 			pattern = cairo.LinearGradient(self.semitones[0]*self.rectwidth, 0, self.semitones[-1]*self.rectwidth, 0)
 
 			semitonerange = self.semitones[-1]-self.semitones[0]
 
-			brightness_slope = - 1.0 / (self.magnitude_max - self.magnitude_min)
-			brightness_const = 1.0*self.magnitude_max / (self.magnitude_max - self.magnitude_min)
-
 			for i in xrange(len(self.semitones)):
-				brightness = brightness_slope * self.magnitudes[i] + brightness_const
-				brightness = max(0.,min(1.,brightness))
-
-				pattern.add_color_stop_rgb( ( self.semitones[i]-self.semitones[0] ) / semitonerange, brightness,brightness,brightness)
+				b = self.brightness[i]
+				pattern.add_color_stop_rgb( ( self.semitones[i]-self.semitones[0] ) / semitonerange, b,b,b)
 		else:
 			pattern = cairo.SolidPattern(1., 1., 1.)
 
@@ -224,6 +193,8 @@ class Fretboard(Base2):
 		context.stroke()
 
 		return True
+
+
 		if hasattr(self,"magnitudes"):
 			power = peakdetector.level_to_power(self.magnitudes)
 			st = peakdetector.get_tones(self.frequencies, power)

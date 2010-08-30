@@ -1,6 +1,16 @@
 #!/usr/bin/env python
 
-import gst, gobject, array
+import gst, gobject, array, numpy
+
+def get_power(data):
+	# apply window
+	window = numpy.hanning(len(data))
+	data *= window
+
+	# fft
+	power = numpy.abs(numpy.fft.rfft(data))**2.
+
+	return power
 
 class AppSinkPipeline(gst.Pipeline):
 	def __init__(self,filename):
@@ -59,7 +69,7 @@ class AppSinkPipeline(gst.Pipeline):
 #		self.finished = True
 #		self.mainloop.quit()
 
-	def get_raw(self,start,stop):
+	def get_data(self,start,stop):
 		#print start, stop
 		self.set_state(gst.STATE_PAUSED)
 		self.get_state()
@@ -87,6 +97,33 @@ class AppSinkPipeline(gst.Pipeline):
 		r = array.array("f", str(buf))
 
 		return r
+
+	def get_spectrum(self,start,stop):
+		MAX_SAMPLES = 8192
+
+		data = self.get_data(start,stop)
+		if not len(data)>0: return False
+
+		rate = self.caps[0]["rate"]
+
+		samples = min(MAX_SAMPLES, len(data))		# number of data points to consider for each fft
+
+		ffts = len(data) / int(samples/2.) - 1		# number of ffts
+
+		# calculate average over powers
+		power = 0.
+
+		for i in xrange(ffts):
+				shift = int(0.5*i*samples)
+				power += get_power(data[ shift : shift+samples ])
+
+		power /= ffts
+
+		# calculate frequencies
+		bands = len(power)
+		frq = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
+
+		return frq, power
 
 #	def get_raw(self,start,stop):
 #		print start, stop

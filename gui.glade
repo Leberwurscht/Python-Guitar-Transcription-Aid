@@ -120,6 +120,41 @@
               </object>
             </child>
             <child>
+              <object class="GtkMenuItem" id="analyze">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Analyze</property>
+                <property name="use_underline">True</property>
+                <child type="submenu">
+                  <object class="GtkMenu" id="menu4">
+                    <property name="visible">True</property>
+                    <child>
+                      <object class="GtkMenuItem" id="fretboard">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Fretboard</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="open_fretboard"/>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="singlestring">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">SingleString</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="plot">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Plot</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="open_plot"/>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
               <object class="GtkMenuItem" id="menuitem4">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">_Hilfe</property>
@@ -211,12 +246,25 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolButton" id="analyze">
+              <object class="GtkToggleToolButton" id="vis_autoupdate">
                 <property name="visible">True</property>
-                <property name="label" translatable="yes">Analyze</property>
+                <property name="label" translatable="yes">Update Visualizers while Playing</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">view-refresh</property>
+                <signal name="toggled" handler="toggle_autoupdate"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="vis_update">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Update Visualizers</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">audio-x-generic</property>
-                <signal name="clicked" handler="analyze"/>
+                <signal name="clicked" handler="update_visualizers"/>
               </object>
               <packing>
                 <property name="expand">False</property>

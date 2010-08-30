@@ -11,6 +11,7 @@ import sys
 #import numpy,array,struct
 import numpy
 import Analyze
+import spectrumvisualizer
 
 class Transcribe:
 	def __init__(self):
@@ -34,16 +35,53 @@ class Transcribe:
 
 		# create fretboard
 #		self.fretboard = Visualizer.SingleString(self.pipeline, tune=-5, capo=2)
-		self.fretboard = Visualizer.Fretboard(self.pipeline, capo=2)
+#		self.fretboard = Visualizer.Fretboard(self.pipeline, capo=2)
 #		self.fretboard.connect_to_bus(bus)
-		self.builder.get_object("vbox").pack_start(self.fretboard,expand=False)
-		self.fretboard.show_all()
+#		self.builder.get_object("vbox").pack_start(self.fretboard,expand=False)
+#		self.fretboard.show_all()
+
+		self.spectrumlistener = spectrumvisualizer.base(self.pipeline.spectrum, self.pipeline)
+		self.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
+
+		self.visualizers = []
+		self.autoupdate = False
+
+		singlestring = self.builder.get_object("singlestring")
+		singlestrings = gtk.Menu()
+
+		for string, semitone in Visualizer.standard_tuning.iteritems():
+			stringitem = gtk.MenuItem(str(string))
+			stringitem.connect("activate", self.open_singlestring, string, semitone)
+			singlestrings.append(stringitem)
+
+		singlestring.set_submenu(singlestrings)
+		singlestrings.show_all()
 
 		# connect signals
 		self.builder.connect_signals(self)
 
 		# update position marker
 		gobject.timeout_add(100, self.update_position_marker)
+
+	def on_magnitudes(self,visbase,bands,rate,threshold,magnitudes):
+		if not self.autoupdate: return
+
+		magnitude_max = 0.
+
+		frequencies = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
+		semitones = 12. * numpy.log2(frequencies/Visualizer.REFERENCE_FREQUENCY)
+		magnitudes = numpy.array(magnitudes)
+
+		brightness_slope = - 1.0 / (magnitude_max - threshold)
+		brightness_const = 1.0 * magnitude_max / (magnitude_max - threshold)
+
+		brightness = brightness_slope * magnitudes + brightness_const
+		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+
+		for viswindow in self.visualizers:
+			viswindow.visualizer.semitones = semitones
+			viswindow.visualizer.brightness = brightness
+			viswindow.visualizer.queue_draw()
 
 	def update_position_marker(self,*args):
 		pos = self.pipeline.get_position()
@@ -79,58 +117,46 @@ class Transcribe:
 			rate = self.builder.get_object("rate").get_value()/100.
 			self.pipeline.play()
 
-	def analyze(self, widget):
-		MAX_SAMPLES = 8192
+	def toggle_autoupdate(self,widget):
+		if widget.get_active(): self.autoupdate = True
+		else: self.autoupdate = False		
+
+	def update_visualizers(self,widget):
 		marker = self.timeline.get_marker()
 
 		if marker:
-			data = self.appsinkpipeline.get_raw(marker[0],marker[0]+marker[1])
-			rate = self.appsinkpipeline.caps[0]["rate"]
+			frq, power = self.appsinkpipeline.get_spectrum(marker[0],marker[0]+marker[1])
 
-			if not len(data)>0:
-				print "NO DATA"
-				return
+			power_max = 500.
+			power_min = 0.
 
-			samples = min(MAX_SAMPLES, len(data))
-			print samples
-#			a = str(buf)
-#			a = array.array("f", a)
-#			print len(a)
+			semitones = 12. * numpy.log2(frq/Visualizer.REFERENCE_FREQUENCY)
 
-			chunks = len(data)/samples
+			brightness_slope = - 1.0 / (power_max - power_min)
+			brightness_const = 1.0 * power_max / (power_max - power_min)
 
-			# get average of power over time
-			power = 0.
-#			int(.5*(x-1)*samples)+samples < len(data)
-#			int(.5(x-1)*samples) < len(data)-samples
-#			fall1: samples gerade
-#				<=> x*samples < 2*len(data)-samples
-#				<=> x < 2*len(data)/samples-1 = len(data) / int(samples/2) - 1
-#				=> x = 2*len(data)/samples-2 = int( 2.*( len(data)-1 )/samples )
-#			fall2: samples ung
-#				<=> (x-1)*(samples-1) < 2*len(data)-2*samples
-#				<=> x*(samples-1) < 2*len(data) - samples -1
-#				<=> x < (2*len(data) - samples - 1) / (samples-1) = 
-#						= 2*len(data) / (samples-1) -1 =
-#						= len(data) / int(samples/2) - 1
-			for i in xrange( len(data) / int(samples/2.) - 1 ):
-				shift = int(0.5*i*samples)
-				d = data[ shift : shift+samples ]
-				power += Analyze.get_power(data[ shift : shift+samples ])
+			brightness = brightness_slope * power + brightness_const
+			brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 
-			power /= chunks
+			for viswindow in self.visualizers:
+				viswindow.visualizer.semitones = semitones
+				viswindow.visualizer.brightness = brightness
+				viswindow.visualizer.queue_draw()
 
-			frq = Analyze.get_frq(len(power), rate)
-			
-			print "SAMPLES",samples,"CHUNKS",chunks
+	def open_fretboard(self,widget):
+		fretboard = Visualizer.Fretboard()
+		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
 
-			self.fretboard.frequencies = frq
-			self.fretboard.semitones = 12. * numpy.log2(frq/440.)
-			self.fretboard.magnitudes = power
-#			self.fretboard.magnitudes = 10.*numpy.log10(power / 8192.**2)
-			self.fretboard.magnitude_max = 500
-			self.fretboard.magnitude_min = 0
-			self.fretboard.queue_draw()
+	def open_singlestring(self,widget,string,semitone):
+		print string,semitone
+		singlestring = Visualizer.SingleString(tune=semitone)
+		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
+
+	def open_plot(self, widget):
+		marker = self.timeline.get_marker()
+
+		if marker:
+			frq, power = self.appsinkpipeline.get_spectrum(marker[0],marker[0]+marker[1])
 
 			w = Analyze.Analyze()
 			w.show_all()
