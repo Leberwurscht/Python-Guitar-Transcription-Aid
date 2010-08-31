@@ -3,6 +3,14 @@
 import gtk
 import goocanvas
 
+class Marker(goocanvas.Rect):
+	def __init__(self,start,duration,position,name,**kwargs):
+		goocanvas.Rect.__init__(self,**kwargs)
+		self.start=start
+		self.duration=duration
+		self.position=position
+		self.name=name
+
 class Timeline(goocanvas.Canvas):
 	def __init__(self, duration, **kwargs):
 		goocanvas.Canvas.__init__(self)
@@ -10,7 +18,7 @@ class Timeline(goocanvas.Canvas):
 		self.duration = duration
 
 		if "scale" in kwargs: self.scale = kwargs["scale"]
-		else: self.scale = 50
+		else: self.scale = 100
 
 		if "width" in kwargs: self.width = kwargs["width"]
 		else: self.width = 400
@@ -38,7 +46,7 @@ class Timeline(goocanvas.Canvas):
 		self.marker = goocanvas.Rect(parent=self.timeline,width=timelinewidth,height=0,visibility=goocanvas.ITEM_INVISIBLE, fill_color_rgba=0x00000044)
 		self.marker.props.pointer_events = 0
 		self.timerect.connect("motion_notify_event", self.timerect_on_motion_notify)
-        	self.timerect.connect("button_press_event", self.timerect_on_button_press)
+		self.timerect.connect("button_press_event", self.timerect_on_button_press)
 		self.timerect.connect("button_release_event", self.timerect_on_button_release)
 
 		for i in xrange(int(duration)):
@@ -52,24 +60,44 @@ class Timeline(goocanvas.Canvas):
 		self.posmarker.props.y = self.scale*pos
 
 	# marker
-	def get_marker(self):
+	def get_playback_marker(self):
 		if self.marker.props.visibility==goocanvas.ITEM_INVISIBLE:
 			return None
 		else:
 			return (1.*self.marker.props.y/self.scale, 1.*self.marker.props.height/self.scale)
 
+	def set_playback_marker(self,pos,length=None, unit="seconds"):
+		self.marker.props.visibility=goocanvas.ITEM_VISIBLE
+
+		if unit=="seconds":
+			self.marker.props.y = self.scale*pos
+			self.marker.props.height = self.scale*length
+		else:
+			self.marker.props.y = pos
+			self.marker.props.height = length
+
+		if self.update_playback_marker_cb:
+			self.update_playback_marker_cb()
+
+	def set_playback_marker_cb(self, cb):
+		self.update_playback_marker_cb = cb
+
 	# marker events
 	def timerect_on_motion_notify (self, item, target, event):
 		if (self.dragging == True) and (event.state & gtk.gdk.BUTTON1_MASK):
-			if self.drag_y<0:
-				self.marker.props.y=0
 			if event.y>self.drag_y:
-				self.marker.props.y=self.drag_y
-				self.marker.props.height=event.y-self.drag_y
+				y=self.drag_y
+				height=event.y-self.drag_y
 			else:
-				self.marker.props.y=event.y
-				self.marker.props.height=self.drag_y-event.y
-				
+				y=event.y
+				height=self.drag_y-event.y
+
+			if event.y<0:
+				height += event.y
+				y = 0
+
+			self.set_playback_marker(y,height,"pts")
+
 		return True
     
 	def timerect_on_button_press (self, item, target, event):
@@ -78,11 +106,12 @@ class Timeline(goocanvas.Canvas):
 
 			canvas = item.get_canvas()
 			canvas.pointer_grab (item, gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.BUTTON_RELEASE_MASK, None, event.time)
-        	        self.dragging = True
+			self.dragging = True
 
-			self.marker.props.visibility = goocanvas.ITEM_VISIBLE
-			self.marker.props.y=event.y
-			self.marker.props.height=0
+#			self.marker.props.visibility = goocanvas.ITEM_VISIBLE
+#			self.marker.props.y=event.y
+#			self.marker.props.height=0
+			self.set_playback_marker(event.y, 0, "pts")
 	        return True
 
 	def timerect_on_button_release (self, item, target, event):
@@ -93,7 +122,7 @@ class Timeline(goocanvas.Canvas):
 	# drag and drop
 	def enable_dragging(self,item):
 		item.connect("motion_notify_event", self.on_motion_notify)
-        	item.connect("button_press_event", self.on_button_press)
+		item.connect("button_press_event", self.on_button_press)
 		item.connect("button_release_event", self.on_button_release)
 
 	def on_motion_notify (self, item, target, event):

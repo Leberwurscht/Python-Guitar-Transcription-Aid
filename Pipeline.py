@@ -13,15 +13,15 @@ def get_power(data):
 	return power
 
 class AppSinkPipeline(gst.Pipeline):
-	def __init__(self,filename):
+	def __init__(self,filename=None):
 		gst.Pipeline.__init__(self)
-
-#		self.mainloop = gobject.MainLoop()
 
 		# filesrc
 		self.filesrc = gst.element_factory_make("filesrc")
-		self.filesrc.set_property("location",filename)
 		self.add(self.filesrc)
+
+		if filename:
+			self.set_file(filename)
 
 		# decodebin
 		decodebin = gst.element_factory_make("decodebin")
@@ -62,6 +62,9 @@ class AppSinkPipeline(gst.Pipeline):
 		compatible_pad = self.convert.get_compatible_pad(pad)
 		pad.link(compatible_pad)
 
+	def set_file(self, filename):
+		self.filesrc.set_property("location",filename)
+
 #	def new_buffer(*args):
 #		print args
 #
@@ -95,6 +98,9 @@ class AppSinkPipeline(gst.Pipeline):
 
 #		print "DONE",len(buf)
 		r = array.array("f", str(buf))
+
+		self.set_state(gst.STATE_NULL)
+		self.get_state()
 
 		return r
 
@@ -191,14 +197,16 @@ class Pipeline(gst.Pipeline):
 		self.set_bands(bands)
 		if not filename==None: self.set_file(filename)
 
+		bus = self.get_bus()
+		bus.add_signal_watch()
+
 	def set_file(self, filename):
 		self.set_state(gst.STATE_NULL)
 		self.get_state()
-
 		self.filesrc.set_property("location",filename)
-
 		self.set_state(gst.STATE_PAUSED)
 		self.get_state()
+		print "set duration"
 		self.duration = 1.*self.query_duration(gst.FORMAT_TIME)[0] / gst.SECOND
 
 	def set_bands(self, bands):
@@ -212,7 +220,7 @@ class Pipeline(gst.Pipeline):
 		self.set_state(gst.STATE_PAUSED)
 		self.get_state()
 
-		if start and stop:
+		if not start==None and not stop==None:
 			self.seek(rate,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
 			self.get_state()
 		elif start:

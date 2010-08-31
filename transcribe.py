@@ -3,49 +3,24 @@
 import gtk, gobject
 gobject.threads_init()
 
-import Visualizer
-import Pipeline
-import Timeline
 import sys
 
-#import numpy,array,struct
+import Project, Visualizer, Analyze
 import numpy
-import Analyze
-import spectrumvisualizer
 
 class Transcribe:
 	def __init__(self):
+		self.visualizers = []
+		self.autoupdate = False
+		self.project = None
+
 		# create gui
 		self.builder = gtk.Builder()
 		self.builder.add_from_file("gui.glade")
 		self.builder.get_object("rate").set_value(100)
+		self.builder.connect_signals(self)
 
-		# create pipelines
-		self.appsinkpipeline = Pipeline.AppSinkPipeline(sys.argv[1])
-#		self.pipeline = Pipeline.Pipeline("/home/maxi/Musik/Audio/jamendo_track_401871.ogg")
-		self.pipeline = Pipeline.Pipeline(sys.argv[1])
-		bus = self.pipeline.get_bus()
-		bus.add_signal_watch()
-#		bus.connect()
-
-		# create timeline
-		self.timeline = Timeline.Timeline(self.pipeline.duration)
-		self.builder.get_object("scrolledwindow").add(self.timeline)
-		self.timeline.show_all()
-
-		# create fretboard
-#		self.fretboard = Visualizer.SingleString(self.pipeline, tune=-5, capo=2)
-#		self.fretboard = Visualizer.Fretboard(self.pipeline, capo=2)
-#		self.fretboard.connect_to_bus(bus)
-#		self.builder.get_object("vbox").pack_start(self.fretboard,expand=False)
-#		self.fretboard.show_all()
-
-		self.spectrumlistener = spectrumvisualizer.base(self.pipeline.spectrum, self.pipeline)
-		self.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
-
-		self.visualizers = []
-		self.autoupdate = False
-
+		# create menu items for SingleString visualizers
 		singlestring = self.builder.get_object("singlestring")
 		singlestrings = gtk.Menu()
 
@@ -57,14 +32,230 @@ class Transcribe:
 		singlestring.set_submenu(singlestrings)
 		singlestrings.show_all()
 
-		# connect signals
-		self.builder.connect_signals(self)
-
 		# update position marker
 		gobject.timeout_add(100, self.update_position_marker)
 
-	def on_magnitudes(self,visbase,bands,rate,threshold,magnitudes):
-		if not self.autoupdate: return
+		# open project
+		if len(sys.argv)>1:
+			self.project = Project.load(sys.argv[1])
+			self.project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
+			self.project.timeline.set_playback_marker_cb(self.update_playback_marker)
+			self.builder.get_object("scrolledwindow").add(self.project.timeline)
+
+	def run(self):
+		self.builder.get_object("mainwindow").show_all()
+		gtk.main()
+
+	# glade callbacks - file menu
+	def new_project(self,*args):
+		self.stop()
+
+		if self.project and self.project.touched:
+			d = gtk.Dialog("Unsaved changes", self.builder.get_object("mainwindow"), gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+					(gtk.STOCK_YES, gtk.RESPONSE_YES, gtk.STOCK_NO, gtk.RESPONSE_NO, gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT))
+			d.vbox.add(gtk.Label("Save project?"))
+			d.show_all()
+			r = d.run()
+			d.destroy()
+
+			if r==gtk.RESPONSE_YES:
+				self.save_project()
+				self.project.close()
+				self.project = None
+			elif r==gtk.RESPONSE_NO:
+				self.project.close()
+				self.project = None
+			else: return
+
+		audiofilechooser = gtk.FileChooserDialog(title="Select audio file",action=gtk.FILE_CHOOSER_ACTION_OPEN, buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+		audiofilechooser.run()
+		audiofile = audiofilechooser.get_filename()
+		audiofilechooser.destroy()
+
+		if not audiofile: return
+
+		self.project = Project.Project(audiofile)
+		self.project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
+		self.project.timeline.set_playback_marker_cb(self.update_playback_marker)
+		self.builder.get_object("scrolledwindow").add(self.project.timeline)
+
+	def open_project(self,widget):
+		if self.project and self.project.touched:
+			self.stop()
+
+			d = gtk.Dialog("Unsaved changes", self.builder.get_object("mainwindow"), gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+					(gtk.STOCK_YES, gtk.RESPONSE_YES, gtk.STOCK_NO, gtk.RESPONSE_NO, gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT))
+			d.vbox.add(gtk.Label("Save project?"))
+			d.show_all()
+			r = d.run()
+			d.destroy()
+
+			if r==gtk.RESPONSE_YES:
+				self.save_project()
+				self.project.close()
+				self.project = None
+			elif r==gtk.RESPONSE_NO:
+				self.project.close()
+				self.project = None
+			else: return
+
+		chooser = gtk.FileChooserDialog(title="Open File",action=gtk.FILE_CHOOSER_ACTION_OPEN, buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+		f = gtk.FileFilter()
+		f.set_name("All Files")
+		f.add_pattern("*")
+		chooser.add_filter(f)
+		f = gtk.FileFilter()
+		f.set_name("Project Files")
+		f.add_pattern("*.%s" % Project.FILENAME_EXTENSION)
+		chooser.add_filter(f)
+		chooser.set_filter(f)
+		chooser.run()
+		filename = chooser.get_filename()
+		chooser.destroy()
+
+		if not filename: return
+
+		self.project = Project.load(filename)
+		self.project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
+		self.project.timeline.set_playback_marker_cb(self.update_playback_marker)
+		self.builder.get_object("scrolledwindow").add(self.project.timeline)
+
+	def save_project_as(self,*args):
+		self.save_project(self,override_filename=True)
+
+	def save_project(self,*args,**kwargs):
+		override_filename=False
+		if "override_filename" in kwargs: override_filename=kwargs["override_filename"]
+
+		if not self.project.filename or override_filename:
+			chooser = gtk.FileChooserDialog(title="Save File As",action=gtk.FILE_CHOOSER_ACTION_SAVE, buttons=(gtk.STOCK_CANCEL,gtk.RESPONSE_CANCEL,gtk.STOCK_OPEN,gtk.RESPONSE_OK))
+			f = gtk.FileFilter()
+			f.set_name("All Files")
+			f.add_pattern("*")
+			chooser.add_filter(f)
+			f = gtk.FileFilter()
+			f.set_name("Project Files")
+			f.add_pattern("*.%s" % Project.FILENAME_EXTENSION)
+			chooser.add_filter(f)
+			chooser.set_filter(f)
+			chooser.run()
+			self.project.filename = chooser.get_filename()
+			chooser.destroy()
+			
+		self.project.save()
+
+	def quit(self, *args):
+		gtk.main_quit()
+
+	# glade callbacks - analyze menu
+	def open_fretboard(self,widget):
+		fretboard = Visualizer.Fretboard()
+		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
+
+	def open_singlestring(self,widget,string,semitone):
+		singlestring = Visualizer.SingleString(tune=semitone)
+		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
+
+	def open_plot(self, widget):
+		if not self.project: return
+
+		start,duration = self.project.timeline.get_playback_marker()
+
+		if marker and self.project:
+			frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
+
+			w = Analyze.Analyze()
+			w.show_all()
+			w.plot_spectrum(frq, power)
+
+	# glade callbacks - toolbar
+	def insert_text(self,widget):
+		raise NotImplementedError
+		self.timeline.mode="insert_text"
+
+	def insert_marker(self,widget):
+		raise NotImplementedError
+		self.project.markers.append()
+
+	def pause(self, *args):
+		if not self.project: return
+
+		if widget.get_active():
+			self.project.pipeline.pause()
+		else:
+			rate = self.builder.get_object("rate").get_value()/100.
+			self.project.pipeline.play()
+
+	def play(self, *args):
+		if not self.project: return
+
+		marker = self.project.timeline.get_playback_marker()
+		if not marker: return
+
+		start, duration = marker
+		rate = self.builder.get_object("rate").get_value()/100.
+
+		self.project.pipeline.play(rate,start=start,stop=start+duration)
+
+		self.builder.get_object("pause").set_active(False)
+		self.builder.get_object("stop").set_sensitive(True)
+
+	def stop(self, *args):
+		if not self.project: return
+
+		self.project.pipeline.pause()
+		self.builder.get_object("pause").set_active(False)
+		self.builder.get_object("stop").set_sensitive(False)
+
+	def toggle_autoupdate(self,widget):
+		if widget.get_active(): self.autoupdate = True
+		else: self.autoupdate = False		
+
+	def update_visualizers(self,widget):
+		if not self.project: return
+
+		marker = self.project.timeline.get_playback_marker()
+		if not marker: return
+
+		start,duration = marker
+
+		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
+
+		power_max = 500.
+		power_min = 0.
+
+		semitones = 12. * numpy.log2(frq/Visualizer.REFERENCE_FREQUENCY)
+
+		brightness_slope = - 1.0 / (power_max - power_min)
+		brightness_const = 1.0 * power_max / (power_max - power_min)
+
+		brightness = brightness_slope * power + brightness_const
+		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+
+		for viswindow in self.visualizers:
+			viswindow.visualizer.semitones = semitones
+			viswindow.visualizer.brightness = brightness
+			viswindow.visualizer.queue_draw()
+
+	# glade callbacks - radioboxes
+	def playback_marker_radioboxes_changed(self,widget):
+		if not self.project: return
+
+		start = self.builder.get_object("position").get_value()
+		duration = self.builder.get_object("duration").get_value()
+		self.project.timeline.set_playback_marker(start,duration)
+
+	# playback marker update callback
+	def update_playback_marker(self):
+		if not self.project: return
+
+		start,duration = self.project.timeline.get_playback_marker()
+		self.builder.get_object("position").set_value(start)
+		self.builder.get_object("duration").set_value(duration)
+
+	# spectrumlistener callback
+	def on_magnitudes(self, spectrumlistener, bands, rate, threshold, magnitudes):
+		if not self.autoupdate or not self.project: return
 
 		magnitude_max = 0.
 
@@ -83,89 +274,13 @@ class Transcribe:
 			viswindow.visualizer.brightness = brightness
 			viswindow.visualizer.queue_draw()
 
+	# position marker callback
 	def update_position_marker(self,*args):
-		pos = self.pipeline.get_position()
-		self.timeline.set_position(pos)
+		if self.project:
+			pos = self.project.pipeline.get_position()
+			self.project.timeline.set_position(pos)
+
 		return True
-
-	def run(self):
-		self.builder.get_object("mainwindow").show_all()
-		gtk.main()
-
-	# callbacks
-
-	def quit(self, *args):
-		gtk.main_quit()
-
-	def insert_text(self,widget):
-		self.timeline.mode="insert_text"
-
-	def play(self,widget):
-		marker = self.timeline.get_marker()
-		rate = self.builder.get_object("rate").get_value()/100.
-
-		if marker:
-			self.pipeline.play(rate,start=marker[0],stop=marker[0]+marker[1])
-
-		self.builder.get_object("pause").set_active(False)
-		self.builder.get_object("stop").set_sensitive(True)
-
-	def pause(self, widget):
-		if widget.get_active():
-			self.pipeline.pause()
-		else:
-			rate = self.builder.get_object("rate").get_value()/100.
-			self.pipeline.play()
-
-	def toggle_autoupdate(self,widget):
-		if widget.get_active(): self.autoupdate = True
-		else: self.autoupdate = False		
-
-	def update_visualizers(self,widget):
-		marker = self.timeline.get_marker()
-
-		if marker:
-			frq, power = self.appsinkpipeline.get_spectrum(marker[0],marker[0]+marker[1])
-
-			power_max = 500.
-			power_min = 0.
-
-			semitones = 12. * numpy.log2(frq/Visualizer.REFERENCE_FREQUENCY)
-
-			brightness_slope = - 1.0 / (power_max - power_min)
-			brightness_const = 1.0 * power_max / (power_max - power_min)
-
-			brightness = brightness_slope * power + brightness_const
-			brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
-
-			for viswindow in self.visualizers:
-				viswindow.visualizer.semitones = semitones
-				viswindow.visualizer.brightness = brightness
-				viswindow.visualizer.queue_draw()
-
-	def open_fretboard(self,widget):
-		fretboard = Visualizer.Fretboard()
-		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
-
-	def open_singlestring(self,widget,string,semitone):
-		print string,semitone
-		singlestring = Visualizer.SingleString(tune=semitone)
-		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
-
-	def open_plot(self, widget):
-		marker = self.timeline.get_marker()
-
-		if marker:
-			frq, power = self.appsinkpipeline.get_spectrum(marker[0],marker[0]+marker[1])
-
-			w = Analyze.Analyze()
-			w.show_all()
-			w.plot_spectrum(frq, power)
-
-	def stop(self,widget):
-		self.pipeline.pause()
-		self.builder.get_object("pause").set_active(False)
-		self.builder.get_object("stop").set_sensitive(False)
 
 if __name__=="__main__":
 	transcribe = Transcribe()

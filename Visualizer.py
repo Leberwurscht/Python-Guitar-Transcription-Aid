@@ -6,51 +6,62 @@ import spectrumvisualizer, peakdetector
 REFERENCE_FREQUENCY = 440
 standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
 
-def integrate(frequency, power, semitone, overtone=0):
-	center_frequency = REFERENCE_FREQUENCY * 1.0594630943592953**semitone
-	center_frequency *= overtone+1
+def integrate(x, y, lower_limit, upper_limit):
+#	center_frequency = REFERENCE_FREQUENCY * 1.0594630943592953**semitone
+#	center_frequency *= overtone+1
 
 	# range is one semitone, so one quartertone up and down
-	lower_limit = center_frequency * 0.97153194115360586
-	upper_limit = center_frequency * 1.0293022366434921
+#	lower_limit = center_frequency * 0.97153194115360586
+#	upper_limit = center_frequency * 1.0293022366434921
 
 	### interpolate power(lower_limit) and power(upper_limit)
-	lower_right_index = numpy.min(numpy.nonzero(frequency > lower_limit))
+	lower_right_index = numpy.min(numpy.nonzero(x > lower_limit))
 	lower_left_index = lower_right_index-1
 
-	lower_left = frequency[lower_left_index]
-	lower_left_power = power[lower_left_index]
+	lower_left = x[lower_left_index]
+	lower_left_y = y[lower_left_index]
 
-	lower_right = frequency[lower_right_index]
-	lower_right_power = power[lower_right_index]
+	lower_right = x[lower_right_index]
+	lower_right_y = y[lower_right_index]
 
-	upper_right_index = numpy.min(numpy.nonzero(frequency > upper_limit))
+	upper_right_index = numpy.min(numpy.nonzero(x > upper_limit))
 	upper_left_index = upper_right_index-1
 
-	upper_left = frequency[upper_left_index]
-	upper_left_power = power[upper_left_index]
+	upper_left = x[upper_left_index]
+	upper_left_y = y[upper_left_index]
 
-	upper_right = frequency[upper_right_index]
-	upper_right_power = power[upper_right_index]
+	upper_right = x[upper_right_index]
+	upper_right_y = y[upper_right_index]
 
-	lower_limit_interpolated = (lower_right-lower_limit)*lower_left_power + (lower_limit-lower_left)*lower_right_power
+	lower_limit_interpolated = (lower_right-lower_limit)*lower_left_y + (lower_limit-lower_left)*lower_right_y
 	lower_limit_interpolated /= lower_right-lower_left
 
-	upper_limit_interpolated = (upper_right-upper_limit)*upper_left_power + (upper_limit-upper_left)*upper_right_power
+	upper_limit_interpolated = (upper_right-upper_limit)*upper_left_y + (upper_limit-upper_left)*upper_right_y
 	upper_limit_interpolated /= upper_right-upper_left
 
 	# build frequency, power for (lower_limit, upper_limit) range
-	f = [lower_limit]
-	p = [lower_limit_interpolated]
+#	newx = [lower_limit]
+#	newy = [lower_limit_interpolated]
+#
+#	for i in xrange(lower_right_index, upper_right_index):
+#		f.append(x[i])
+#		p.append(y[i])
+#
+#	newx.append(upper_limit)
+#	newy.append(upper_limit_interpolated)
 
-	for i in xrange(lower_right_index, upper_right_index):
-		f.append(frequency[i])
-		p.append(power[i])
+	int_x = numpy.zeros(upper_right_index-lower_right_index + 2)
+	int_y = numpy.zeros(upper_right_index-lower_right_index + 2)
 
-	f.append(upper_limit)
-	p.append(upper_limit_interpolated)
+	int_x[0] += lower_limit
+	int_x[1:-1] += x[lower_right_index:upper_right_index]
+	int_x[-1] += upper_limit
 
-	r = numpy.trapz(p, f)
+	int_y[0] += lower_limit_interpolated
+	int_y[1:-1] += y[lower_right_index:upper_right_index]
+	int_y[-1] += upper_limit_interpolated
+
+	r = numpy.trapz(int_y, int_x)
 
 	return r
 
@@ -222,10 +233,9 @@ class SingleString(Fretboard):
 		else: self.tune = -5
 
 		if "overtones" in kwargs: self.overtones = kwargs["overtones"]
-		else: self.overtones = 5
+		else: self.overtones = 10
 
-		if "rectheight" in kwargs: self.rectheight = kwargs["rectheight"]
-		else: self.rectheight = 10
+		if not "rectheight" in kwargs: kwargs["rectheight"] = 10
 
 		kwargs["strings"] = {}
 		for i in xrange(1,self.overtones+2):
@@ -240,31 +250,36 @@ class SingleString(Fretboard):
 	def draw(self, widget, event):
 		Fretboard.draw(self, widget, event)
 
-		if not hasattr(self,"magnitudes"): return True
+		return True
+		if not hasattr(self,"brightness"): return True
 
 #		power = 1.26**self.magnitudes # from dB to power
 #		power = self.magnitudes
 
-		brightness_slope = - 1.0 / (self.magnitude_max - self.magnitude_min)
-		brightness_const = 1.0*self.magnitude_max / (self.magnitude_max - self.magnitude_min)
+#		brightness_slope = - 1.0 / (self.magnitude_max - self.magnitude_min)
+#		brightness_const = 1.0*self.magnitude_max / (self.magnitude_max - self.magnitude_min)
 
-		brightness = brightness_slope * self.magnitudes + brightness_const
-		brightness = 1.-numpy.clip(brightness, 0.,1.)
-		power = brightness
+#		brightness = brightness_slope * self.magnitudes + brightness_const
+#		brightness = 1.-numpy.clip(brightness, 0.,1.)
+#		power = brightness
 
 		context = widget.window.cairo_create()
 
 		for fret in xrange(self.frets+1):
 			context.rectangle(self.paddingx+fret*self.rectwidth, self.sumy, self.rectwidth, self.rectheight)
 
-			# calculate total power, including overtones
-			t=0
-			for i in xrange(self.overtones+1):
-				t += integrate(self.frequencies, power, self.tune+fret, i)
+			darkness = 1. - self.brightness
 
+			# calculate total
+			total=0
+			for string in self.strings.values():
+				semitone = string + fret
+				total += integrate(self.semitones, darkness, semitone-0.5, semitone+0.5)
+#				t += integrate(self.frequencies, power, self.tune+fret, i)
+			print total
 			# convert to dB
-			dB = 4.3269116591383208 * numpy.log(t)
-			print fret,t,dB
+#			dB = 4.3269116591383208 * numpy.log(t)
+#			print fret,t,dB
 
 			# calculate brightness
 #			mag_max = self.magnitude_max * self.overtones/2.
@@ -276,15 +291,20 @@ class SingleString(Fretboard):
 #			maximum = 1.26**self.magnitude_max * (self.overtones+1)*.05
 #			maximum = 0.001
 #			print minimum, maximum
-			minimum = 0
-			maximum = 5
-			brightness_slope = - 1.0 / (maximum - minimum)
-			brightness_const = 1.0*maximum / (maximum - minimum)
+#			minimum = 0
+#			maximum = 5
+#			brightness_slope = - 1.0 / (maximum - minimum)
+#			brightness_const = 1.0*maximum / (maximum - minimum)
+#
+#			brightness = brightness_slope * t + brightness_const
+#			brightness = max(0.,min(1.,brightness))
 
-			brightness = brightness_slope * t + brightness_const
+			avg = total / (self.overtones+1.)
+
+			brightness = 1.-avg
 			brightness = max(0.,min(1.,brightness))
 			
-			context.set_source_rgb(brightness,brightness,brightness)
+			context.set_source_rgb(brightness, brightness, brightness)
 			context.fill_preserve()
 
 			context.set_line_width(3)
