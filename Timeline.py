@@ -3,19 +3,155 @@
 import gtk
 import goocanvas
 
-class Marker(goocanvas.Rect):
-	def __init__(self,start,duration,position,name,**kwargs):
-		goocanvas.Rect.__init__(self,**kwargs)
-		self.start=start
-		self.duration=duration
-		self.position=position
-		self.name=name
+# click modes
+MODE_DEFAULT, MODE_ANNOTATE, MODE_DELETE = xrange(3)
+
+class Marker(goocanvas.Group):
+	def __init__(self,timeline,start,duration,text,**kwargs):
+		self.timeline = timeline
+		kwargs["parent"] = timeline.space
+
+		kwargs["y"] = self.timeline.get_pts(start)
+
+		goocanvas.Group.__init__(self,**kwargs)
+
+		width = 20
+		height = self.timeline.get_pts(duration)
+		self.rect = goocanvas.Rect(parent=self,width=width,height=height,fill_color_rgba=0xaa0000aa)
+		self.text = goocanvas.Text(parent=self,text=text)
+
+	def get_start(self):
+		return self.timeline.get_seconds(self.props.y)
+
+	def get_duration(self):
+		return self.timeline.get_seconds(self.rect.props.height)
+
+	def get_text(self):
+		return self.text.props.text
+
+class Annotation(goocanvas.Text):
+	def __init__(self,timeline,**kwargs):
+		self.timeline=timeline
+		kwargs["parent"] = timeline.space
+
+		if "time" in kwargs:
+			kwargs["y"] = self.timeline.get_pts(kwargs["time"])
+			del kwargs["time"]
+
+		goocanvas.Text.__init__(self,**kwargs)
+
+		self.timeline.enable_dragging(self)
+
+	def get_time(self):
+		return self.timeline.get_seconds(self.props.y)
+
+class Ruler(goocanvas.Group):
+	def __init__(self, timeline, project, **kwargs):
+		self.timeline = timeline
+		self.project = project
+		self.playback_marker_changed_cb = None
+
+		if "width" in kwargs:
+			width = kwargs["width"]
+			del kwargs["width"]
+		else:
+			width = 50
+
+		goocanvas.Group.__init__(self,**kwargs)
+
+		self.rect = goocanvas.Rect(parent=self, width=width, height=timeline.get_pts(project.pipeline.duration), fill_color="blue")
+		self.rect.connect("button_press_event", self.button_press)
+		self.motion_handler_id = None
+		self.release_handler_id = None
+
+		# labelling
+		for i in xrange(int(project.pipeline.duration)):
+			goocanvas.Text(parent=self, text=str(1.0*i), y=timeline.get_pts(i))
+
+		# playback_marker
+		self.playback_marker = goocanvas.Rect(parent=self, width=width, height=0, visibility=goocanvas.ITEM_INVISIBLE, fill_color_rgba=0x00000044)
+		self.playback_marker.props.pointer_events = 0 # let self.rect receive pointer events
+
+	# set callback
+	def set_playback_marker_changed_cb(self, cb):
+		self.playback_marker_changed_cb = cb
+
+	# playback marker
+	def button_press (self, item, target, event):
+		if not event.button==1: return
+
+		if self.motion_handler_id:
+			self.rect.handler_disconnect(self.motion_handler_id)
+			self.motion_handler_id = None
+		if self.release_handler_id:
+			self.rect.handler_disconnect(self.release_handler_id)
+			self.release_handler_id = None
+
+		# hide playback marker
+		self.playback_marker.props.visibility = goocanvas.ITEM_INVISIBLE
+
+		# grab pointer
+		canvas = item.get_canvas()
+		canvas.pointer_grab(item, gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.BUTTON_RELEASE_MASK, None, event.time)
+
+		# connect callbacks
+		self.motion_handler_id = self.rect.connect("motion_notify_event", self.motion_notify, event.y)
+		self.release_handler_id = self.rect.connect("button_release_event", self.button_release, event.y)
+
+		return True
+
+	def motion_notify (self, item, target, event, y):
+		assert not self.motion_handler_id==None
+
+		if event.y<0:
+			self.playback_marker.props.y = 0
+			self.playback_marker.props.height = y
+		elif event.y>y:
+			self.playback_marker.props.y = y
+			self.playback_marker.props.height = event.y - y
+		else:
+			self.playback_marker.props.y = event.y
+			self.playback_marker.props.height = y - event.y
+
+		# make marker visible
+		self.playback_marker.props.visibility = goocanvas.ITEM_VISIBLE
+
+		if self.playback_marker_changed_cb: self.playback_marker_changed_cb()
+
+		return True
+
+	def button_release (self, item, target, event, y):
+		assert not self.motion_handler_id==None
+		assert not self.release_handler_id==None
+
+		# ungrab pointer
+		canvas = item.get_canvas()
+		canvas.pointer_ungrab(item, event.time)
+
+		# delete handlers
+		self.rect.handler_disconnect(self.motion_handler_id)
+		self.rect.handler_disconnect(self.release_handler_id)
+		self.motion_handler_id = None
+		self.release_handler_id = None
+
+	# marker access functions
+	def get_playback_marker(self):
+		if not self.playback_marker.props.visibility==goocanvas.ITEM_VISIBLE: return None
+
+		start,duration = self.timeline.get_seconds(self.playback_marker.props.y, self.playback_marker.props.height)
+
+		return start, duration
+
+	def set_playback_marker(self,start,duration):
+		self.playback_marker.props.y = self.timeline.get_pts(start)
+		self.playback_marker.props.height = self.timeline.get_pts(duration)
+		self.playback_marker.props.visibility = goocanvas.ITEM_VISIBLE
 
 class Timeline(goocanvas.Canvas):
-	def __init__(self, duration, **kwargs):
+	def __init__(self, project, **kwargs):
 		goocanvas.Canvas.__init__(self)
 
-		self.duration = duration
+		self.project = project
 
 		if "scale" in kwargs: self.scale = kwargs["scale"]
 		else: self.scale = 100
@@ -31,7 +167,7 @@ class Timeline(goocanvas.Canvas):
 		self.dragging=False
 
 		# configure canvas
-		self.set_bounds(0,0,self.width,self.duration*self.scale)
+		self.set_bounds(0,0,self.width,self.get_pts(self.project.pipeline.duration))
 		self.connect("button_press_event",self.canvas_button_press)
 
 		root = self.get_root_item()
@@ -41,83 +177,40 @@ class Timeline(goocanvas.Canvas):
 		self.space.translate(timelinewidth,0)
 
 		# setup timeline
-		self.timeline = goocanvas.Group(parent=root)
-		self.timerect = goocanvas.Rect(parent=self.timeline,width=timelinewidth,height=self.duration*self.scale,fill_color="blue")
-		self.marker = goocanvas.Rect(parent=self.timeline,width=timelinewidth,height=0,visibility=goocanvas.ITEM_INVISIBLE, fill_color_rgba=0x00000044)
-		self.marker.props.pointer_events = 0
-		self.timerect.connect("motion_notify_event", self.timerect_on_motion_notify)
-		self.timerect.connect("button_press_event", self.timerect_on_button_press)
-		self.timerect.connect("button_release_event", self.timerect_on_button_release)
+#		self.timeline = goocanvas.Group(parent=root)
+#		self.timerect = goocanvas.Rect(parent=self.timeline,width=timelinewidth,height=self.get_pts(self.project.pipeline.duration),fill_color="blue")
+#		self.marker = goocanvas.Rect(parent=self.timeline,width=timelinewidth,height=0,visibility=goocanvas.ITEM_INVISIBLE, fill_color_rgba=0x00000044)
+#		self.marker.props.pointer_events = 0
+#		self.timerect.connect("motion_notify_event", self.timerect_on_motion_notify)
+#		self.timerect.connect("button_press_event", self.timerect_on_button_press)
+#		self.timerect.connect("button_release_event", self.timerect_on_button_release)
 
-		for i in xrange(int(duration)):
-			goocanvas.Text(parent=self.timeline, text=str(i), y=i*self.scale)
+#		for i in xrange(int(self.project.pipeline.duration)):
+#			goocanvas.Text(parent=self.timeline, text=str(i), y=self.get_pts(i))
 
 		# position marker
 		self.posmarker = goocanvas.polyline_new_line(root, 0, 0, self.width, 0)
 
+		# items
+		self.annotations = []
+		self.markers = []
+
+		self.ruler = Ruler(self, self.project, parent=root)
+
+	# unit conversion
+	def get_pts(self,*args):
+		r = [1.*self.scale*seconds for seconds in args]
+		if len(r)==1: return r[0]
+		else: return r
+
+	def get_seconds(self,*args):
+		r = [1.*pts/self.scale for pts in args]
+		if len(r)==1: return r[0]
+		else: return r
+
 	# position marker
 	def set_position(self, pos):
-		self.posmarker.props.y = self.scale*pos
-
-	# marker
-	def get_playback_marker(self):
-		if self.marker.props.visibility==goocanvas.ITEM_INVISIBLE:
-			return None
-		else:
-			return (1.*self.marker.props.y/self.scale, 1.*self.marker.props.height/self.scale)
-
-	def set_playback_marker(self,pos,length=None, unit="seconds"):
-		self.marker.props.visibility=goocanvas.ITEM_VISIBLE
-
-		if unit=="seconds":
-			self.marker.props.y = self.scale*pos
-			self.marker.props.height = self.scale*length
-		else:
-			self.marker.props.y = pos
-			self.marker.props.height = length
-
-		if self.update_playback_marker_cb:
-			self.update_playback_marker_cb()
-
-	def set_playback_marker_cb(self, cb):
-		self.update_playback_marker_cb = cb
-
-	# marker events
-	def timerect_on_motion_notify (self, item, target, event):
-		if (self.dragging == True) and (event.state & gtk.gdk.BUTTON1_MASK):
-			if event.y>self.drag_y:
-				y=self.drag_y
-				height=event.y-self.drag_y
-			else:
-				y=event.y
-				height=self.drag_y-event.y
-
-			if event.y<0:
-				height += event.y
-				y = 0
-
-			self.set_playback_marker(y,height,"pts")
-
-		return True
-    
-	def timerect_on_button_press (self, item, target, event):
-		if event.button == 1:
-			self.drag_y = event.y
-
-			canvas = item.get_canvas()
-			canvas.pointer_grab (item, gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.BUTTON_RELEASE_MASK, None, event.time)
-			self.dragging = True
-
-#			self.marker.props.visibility = goocanvas.ITEM_VISIBLE
-#			self.marker.props.y=event.y
-#			self.marker.props.height=0
-			self.set_playback_marker(event.y, 0, "pts")
-	        return True
-
-	def timerect_on_button_release (self, item, target, event):
-		canvas = item.get_canvas()
-		canvas.pointer_ungrab(item, event.time)
-		self.dragging = False
+		self.posmarker.props.y = self.get_pts(pos)
 
 	# drag and drop
 	def enable_dragging(self,item):
@@ -129,34 +222,42 @@ class Timeline(goocanvas.Canvas):
 		if (self.dragging == True) and (event.state & gtk.gdk.BUTTON1_MASK):
 			new_x = event.x
 			new_y = event.y
-			item.translate (new_x - self.drag_x, new_y - self.drag_y)
+#			item.translate (new_x - self.drag_x, new_y - self.drag_y)
+			item.props.x = new_x - self.drag_x
+			item.props.y = new_y - self.drag_y
+			self.project.touched=True
 		return True
     
 	def on_button_press (self, item, target, event):
 		if event.button == 1:
-			self.drag_x = event.x
-			self.drag_y = event.y
+			self.drag_x = event.x - item.props.x
+			self.drag_y = event.y - item.props.y
+#			self.drag_x = event.x
+#			self.drag_y = event.y
 
 			canvas = item.get_canvas()
 			canvas.pointer_grab (item, gtk.gdk.POINTER_MOTION_MASK | gtk.gdk.BUTTON_RELEASE_MASK, None, event.time)
-        	        self.dragging = True
+			self.dragging = True
 	        return True
 
 	def on_button_release (self, item, target, event):
 		canvas = item.get_canvas()
 		canvas.pointer_ungrab(item, event.time)
 		self.dragging = False
+#		print item.props.x,item.props.y,item.props.text,item.get_time()
+#		print item.get_simple_transform()
 
 	# space events
 	def canvas_button_press(self,widget,event):
-		if self.mode=="insert_text":
+		if self.mode==MODE_ANNOTATE:
 			dialog = gtk.Dialog(title="Text", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
 			entry = gtk.Entry()
 			dialog.vbox.add(entry)
 			dialog.show_all()
 			if dialog.run()==gtk.RESPONSE_ACCEPT:
 				x,y,scale,rotation = self.space.get_simple_transform()
-				text = goocanvas.Text(parent=self.space, text=entry.get_text(), x=event.x-x, y=event.y-y)
-				self.enable_dragging(text)
+				ann = Annotation(self,text=entry.get_text(), x=event.x-x, y=event.y-y)
+				self.annotations.append(ann)
+				self.project.touched=True
 			dialog.destroy()
-			self.mode=None
+			self.mode=MODE_DEFAULT

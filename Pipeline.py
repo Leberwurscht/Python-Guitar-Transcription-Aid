@@ -2,6 +2,8 @@
 
 import gst, gobject, array, numpy
 
+MAX_FFT_SAMPLES = 8192
+
 def get_power(data):
 	# apply window
 	window = numpy.hanning(len(data))
@@ -99,20 +101,18 @@ class AppSinkPipeline(gst.Pipeline):
 #		print "DONE",len(buf)
 		r = array.array("f", str(buf))
 
-		self.set_state(gst.STATE_NULL)
+		self.set_state(gst.STATE_PAUSED)
 		self.get_state()
 
 		return r
 
 	def get_spectrum(self,start,stop):
-		MAX_SAMPLES = 8192
-
 		data = self.get_data(start,stop)
-		if not len(data)>0: return False
+		if not len(data)>0: return numpy.array([]), numpy.array([])
 
 		rate = self.caps[0]["rate"]
 
-		samples = min(MAX_SAMPLES, len(data))		# number of data points to consider for each fft
+		samples = min(MAX_FFT_SAMPLES, len(data))	# number of data points to consider for each fft
 
 		ffts = len(data) / int(samples/2.) - 1		# number of ffts
 
@@ -203,10 +203,12 @@ class Pipeline(gst.Pipeline):
 	def set_file(self, filename):
 		self.set_state(gst.STATE_NULL)
 		self.get_state()
+
 		self.filesrc.set_property("location",filename)
+
 		self.set_state(gst.STATE_PAUSED)
 		self.get_state()
-		print "set duration"
+
 		self.duration = 1.*self.query_duration(gst.FORMAT_TIME)[0] / gst.SECOND
 
 	def set_bands(self, bands):

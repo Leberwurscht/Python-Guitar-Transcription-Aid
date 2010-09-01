@@ -55,6 +55,15 @@
                       </object>
                     </child>
                     <child>
+                      <object class="GtkImageMenuItem" id="gtk-close">
+                        <property name="label">gtk-close</property>
+                        <property name="visible">True</property>
+                        <property name="use_underline">True</property>
+                        <property name="use_stock">True</property>
+                        <signal name="activate" handler="close_project"/>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkSeparatorMenuItem" id="separatormenuitem1">
                         <property name="visible">True</property>
                       </object>
@@ -188,12 +197,12 @@
           <object class="GtkToolbar" id="toolbar1">
             <property name="visible">True</property>
             <child>
-              <object class="GtkToolButton" id="inserttext">
+              <object class="GtkToolButton" id="insert_annotation">
                 <property name="visible">True</property>
-                <property name="label" translatable="yes">Insert text</property>
+                <property name="label" translatable="yes">Insert Annotation</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">insert-text</property>
-                <signal name="clicked" handler="insert_text"/>
+                <signal name="clicked" handler="insert_annotation"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -207,6 +216,19 @@
                 <property name="use_underline">True</property>
                 <property name="icon_name">list-add</property>
                 <signal name="clicked" handler="insert_marker"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="delete_item">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Delete</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">edit-delete</property>
+                <signal name="clicked" handler="delete_item"/>
               </object>
               <packing>
                 <property name="expand">False</property>
