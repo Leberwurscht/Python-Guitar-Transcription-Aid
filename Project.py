@@ -9,7 +9,7 @@ FILENAME_EXTENSION = "tr"
 FILE_TYPE = "http://www.hoegners.de/Maxi/transcribe"
 FILE_FORMAT_VERSION = "0.1"
 
-def load(filename):
+def load(transcribe, filename):
 	f = open(filename)
 	try: json_object = json.load(f)
 	except:	raise InvalidFileFormat, "Need JSON file!"
@@ -21,11 +21,9 @@ def load(filename):
 	if not json_object["format_version"]==FILE_FORMAT_VERSION:
 		raise InvalidFileFormat, "Got file format version %s, need version %s" % (json_object["format_version"], FILE_FORMAT_VERSION)
 
-	project = Project(json_object["audiofile"], filename)
+	project = Project(transcribe, json_object["audiofile"], filename)
 
 	for json_marker_object in json_object["markers"]:
-#		raise NotImplementedError
-#		marker = Timeline.Marker(json_marker_object["start"],json_marker_object["duration"],json_marker_object["name"],)
 		marker = Timeline.Marker(
 			project.timeline,
 			json_marker_object["start"],
@@ -49,7 +47,10 @@ def load(filename):
 	return project
 
 class Project:
-	def __init__(self, audiofile, filename=None):
+	def __init__(self, transcribe, audiofile, filename=None):
+		# to be able to update the playback marker SpinButtons and the mode RadioButtons
+		self.transcribe = transcribe
+
 		self.filename = filename
 		self.audiofile = audiofile
 		self.touched = True
@@ -71,7 +72,6 @@ class Project:
 		json_object["file_type"] = FILE_TYPE
 
 		for marker in self.timeline.markers:
-#			print NotImplementedError
 			json_object["markers"].append({"start":marker.get_start(), "duration":marker.get_duration(), "text":marker.get_text(), "x":marker.props.x})
 
 		for annotation in self.timeline.annotations:
@@ -81,6 +81,9 @@ class Project:
 
 		f.close()
 		self.touched = False
+
+	def touch(self):
+		self.touched = True
 
 	def close(self):
 		self.appsinkpipeline.set_state(Pipeline.gst.STATE_NULL)

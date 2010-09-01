@@ -37,14 +37,23 @@ class Transcribe:
 
 		# open project
 		if len(sys.argv)>1:
-			self.project = Project.load(sys.argv[1])
-			self.project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
-			self.project.timeline.ruler.set_playback_marker_changed_cb(self.update_playback_marker)
-			self.builder.get_object("scrolledwindow").add(self.project.timeline)
+			project = Project.load(self, sys.argv[1])
+			self.set_project(project)
 
 	def run(self):
 		self.builder.get_object("mainwindow").show_all()
 		gtk.main()
+
+	def set_project(self, project):
+		if self.project: return False
+
+		project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
+#		project.timeline.ruler.set_playback_marker_changed_cb(self.update_playback_marker)
+		self.builder.get_object("timelinecontainer").add(project.timeline)
+#		self.builder.get_object("timelinecontainer").pack_start(project.timeline, False, False)
+
+		self.project = project
+		return True
 
 	# glade callbacks - file menu
 	def new_project(self,*args):
@@ -57,10 +66,8 @@ class Transcribe:
 
 		if not audiofile: return
 
-		self.project = Project.Project(audiofile)
-		self.project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
-		self.project.timeline.ruler.set_playback_marker_changed_cb(self.update_playback_marker)
-		self.builder.get_object("scrolledwindow").add(self.project.timeline)
+		project = Project.Project(self, audiofile)
+		self.set_project(project)
 
 	def open_project(self,widget):
 		if not self.close_project(): return
@@ -81,10 +88,8 @@ class Transcribe:
 
 		if not filename: return
 
-		self.project = Project.load(filename)
-		self.project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
-		self.project.timeline.ruler.set_playback_marker_changed_cb(self.update_playback_marker)
-		self.builder.get_object("scrolledwindow").add(self.project.timeline)
+		project = Project.load(self, filename)
+		self.set_project(project)
 
 	def save_project_as(self,*args):
 		self.save_project(self,override_filename=True)
@@ -160,7 +165,7 @@ class Transcribe:
 	def open_plot(self, widget):
 		if not self.project: return
 
-		marker = self.project.timeline.get_playback_marker()
+		marker = self.project.timeline.ruler.get_playback_marker()
 		if not marker: return
 
 		start,duration = marker
@@ -172,15 +177,21 @@ class Transcribe:
 		w.plot_spectrum(frq, power)
 
 	# glade callbacks - toolbar
+	def set_default_mode(self,widget):
+		if not widget.get_active(): return
+
+		self.project.timeline.mode=Project.Timeline.MODE_DEFAULT
+
 	def insert_annotation(self,widget):
 		if not self.project: return
+		if not widget.get_active(): return
 
 		self.project.timeline.mode=Project.Timeline.MODE_ANNOTATE
 
 	def delete_item(self,widget):
 		if not self.project: return
+		if not widget.get_active(): return
 
-		raise NotImplementedError
 		self.project.timeline.mode=Project.Timeline.MODE_DELETE
 
 	def insert_marker(self,widget):
@@ -191,14 +202,25 @@ class Transcribe:
 
 		start,duration = playback_marker
 
+		dialog = gtk.Dialog(title="Text", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+		entry = gtk.Entry()
+		dialog.vbox.add(entry)
+		dialog.show_all()
+		if dialog.run()==gtk.RESPONSE_ACCEPT:
+			text=entry.get_text()	
+			dialog.destroy()
+		else:
+			dialog.destroy()
+			return
+
 		marker = Project.Timeline.Marker(
 			self.project.timeline,
 			start,
 			duration,
-			"text",
-			x = 20)
+			text
+		)
 		self.project.timeline.markers.append(marker)
-		self.project.touched = True
+		self.project.touch()
 
 	def pause(self, widget):
 		if not self.project: return
@@ -260,6 +282,33 @@ class Transcribe:
 			viswindow.visualizer.brightness = brightness
 			viswindow.visualizer.queue_draw()
 
+	def playback_marker_previous(self, *args):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+
+		start,duration = marker
+		start -= duration
+		start = max(0,start)
+
+		self.project.timeline.ruler.set_playback_marker(start, duration)
+		self.update_playback_marker_spinbuttons()
+#		self.update_playback_marker()
+
+	def playback_marker_next(self, *args):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+
+		start,duration = marker
+		start += duration
+
+		self.project.timeline.ruler.set_playback_marker(start, duration)
+		self.update_playback_marker_spinbuttons()
+#		self.update_playback_marker()
+
 	# glade callbacks - radioboxes
 	def playback_marker_radioboxes_changed(self,widget):
 		if not self.project: return
@@ -268,8 +317,8 @@ class Transcribe:
 		duration = self.builder.get_object("duration").get_value()
 		self.project.timeline.ruler.set_playback_marker(start,duration)
 
-	# playback marker update callback
-	def update_playback_marker(self):
+	# playback marker spinbuttons are updated by Timeline
+	def update_playback_marker_spinbuttons(self):
 		if not self.project: return
 
 		start,duration = self.project.timeline.ruler.get_playback_marker()

@@ -197,12 +197,27 @@
           <object class="GtkToolbar" id="toolbar1">
             <property name="visible">True</property>
             <child>
-              <object class="GtkToolButton" id="insert_annotation">
+              <object class="GtkRadioToolButton" id="mode_default">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Pointer</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">input-mouse</property>
+                <property name="active">True</property>
+                <signal name="toggled" handler="set_default_mode"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkRadioToolButton" id="mode_annotate">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Insert Annotation</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">insert-text</property>
-                <signal name="clicked" handler="insert_annotation"/>
+                <property name="group">mode_default</property>
+                <signal name="toggled" handler="insert_annotation"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -210,25 +225,13 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolButton" id="insert_marker">
-                <property name="visible">True</property>
-                <property name="label" translatable="yes">Insert marker</property>
-                <property name="use_underline">True</property>
-                <property name="icon_name">list-add</property>
-                <signal name="clicked" handler="insert_marker"/>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="homogeneous">True</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkToolButton" id="delete_item">
+              <object class="GtkRadioToolButton" id="mode_delete">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Delete</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">edit-delete</property>
-                <signal name="clicked" handler="delete_item"/>
+                <property name="group">mode_default</property>
+                <signal name="toggled" handler="delete_item"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -304,6 +307,54 @@
                 <property name="use_underline">True</property>
                 <property name="icon_name">audio-x-generic</property>
                 <signal name="clicked" handler="update_visualizers"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparatorToolItem" id="toolbutton1">
+                <property name="visible">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="playback_marker_previous">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Move back playback marker</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">go-previous</property>
+                <signal name="clicked" handler="playback_marker_previous"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="playback_marker_next">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Move on playback marker</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">go-next</property>
+                <signal name="clicked" handler="playback_marker_next"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="insert_marker">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Insert marker</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">list-add</property>
+                <signal name="clicked" handler="insert_marker"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -396,7 +447,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkScrolledWindow" id="scrolledwindow">
+          <object class="GtkScrolledWindow" id="timelinecontainer">
             <property name="height_request">200</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>

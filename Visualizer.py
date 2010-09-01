@@ -82,33 +82,6 @@ class VisualizerWindow(gtk.Window):
 		self.vislist.remove(self)
 		return False
 
-class Base2(gtk.DrawingArea):
-	def __init__(self,pipeline,spectrum_element=False):
-		gtk.DrawingArea.__init__(self)
-		self.connect("expose_event", self.draw)
-		self.pipeline=pipeline
-		if spectrum_element:
-			self.spectrum_element = spectrum_element
-		else:
-			self.spectrum_element = pipeline.get_by_name('spectrum')
-
-		self.visbase = spectrumvisualizer.base(self.spectrum_element, pipeline)
-		self.visbase.connect("magnitudes_available", self.on_magnitudes)
-
-	def on_magnitudes(self,visbase,bands,rate,threshold,magnitudes):
-#		print bands,rate,threshold,magnitudes
-		bands_array = numpy.arange(bands)
-		self.frequencies = 0.5 * ( bands_array + 0.5 ) * rate / bands
-		self.semitones = 12. * numpy.log2(self.frequencies/REFERENCE_FREQUENCY)
-
-		self.magnitudes = numpy.array(magnitudes)
-
-		self.magnitude_min = threshold
-
-		self.queue_draw()
-		
-	def draw(self,widget,event): pass
-
 class Fretboard(gtk.DrawingArea):
 	def __init__(self,*args,**kwargs):
 		gtk.DrawingArea.__init__(self,*args)
