@@ -186,7 +186,7 @@ class Transcribe:
 	def insert_marker(self,widget):
 		if not self.project: return
 
-		playback_marker = self.project.timeline.get_playback_marker()
+		playback_marker = self.project.timeline.ruler.get_playback_marker()
 		if not playback_marker: return
 
 		start,duration = playback_marker
