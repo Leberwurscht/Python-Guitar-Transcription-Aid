@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# https://bugs.freedesktop.org/show_bug.cgi?id=29470
+
 import gtk, cairo
 
 def expose(widget,event):
