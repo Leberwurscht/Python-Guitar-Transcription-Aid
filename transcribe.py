@@ -171,6 +171,7 @@ class Transcribe:
 		start,duration = marker
 
 		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
+		print sum(power)
 
 		w = Analyze.Analyze()
 		w.show_all()

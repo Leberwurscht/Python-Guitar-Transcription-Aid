@@ -24,8 +24,20 @@ class CompareWindow(gtk.Window):
 
 		gtk.Window.__init__(self,*args,**kwargs)
 
+		self.set_title("Compare")
+
+		vbox = gtk.VBox()
+		self.add(vbox)
+
+		hbox = gtk.HBox()
+		hbox.add(gtk.Label("Volume"))
+		self.adj = gtk.Adjustment(0.04,0.0,10.0,0.01)
+		spinbtn = gtk.SpinButton(self.adj,0.01,2)
+		hbox.add(spinbtn)
+		vbox.add(hbox)
+
 		self.table = gtk.Table(len(self.strings), self.frets)
-		self.add(self.table)
+		vbox.add(self.table)
 
 		for string,tuning in self.strings.iteritems():
 			for fret in xrange(self.frets+1):
@@ -37,14 +49,15 @@ class CompareWindow(gtk.Window):
 				frq = semitone_to_frequency(semitone)
 				btn.connect("pressed",self.press,frq)
 				btn.connect("released",self.release)
-				btn.set_tooltip_text(str(frq))
+				btn.set_tooltip_text(str(frq)+" Hz")
 				self.table.attach(btn,fret,fret+1,string-1,string)
 
 		self.show_all()
 
-		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! gconfaudiosink")
+		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
 
 	def press(self,btn,frq):
+		self.pipeline.get_by_name("volume").set_property("volume", self.adj.get_value())
 		self.pipeline.get_by_name("src").set_property("freq", frq)
 		self.pipeline.set_state(gst.STATE_PLAYING)
 	def release(self,semitone):
@@ -139,7 +152,7 @@ def frequency_to_semitone(frequency):
 	return semitone
 
 def semitone_to_frequency(semitone):
-	frequency = REFERENCE_FREQUENCY * 2.**(semitone/12.)
+	frequency = REFERENCE_FREQUENCY * (2.**(1./12.))**semitone
 	return frequency
 
 class SpectrumData:
@@ -233,7 +246,7 @@ class Fretboard(gtk.DrawingArea):
 		else: self.strings = standard_tuning
 
 		if "frets" in kwargs: self.frets = kwargs["frets"]
-		else: self.frets = 12
+		else: self.frets = 32
 
 		if "rectwidth" in kwargs: self.rectwidth = kwargs["rectwidth"]
 		else: self.rectwidth = 30
@@ -276,21 +289,40 @@ class Fretboard(gtk.DrawingArea):
 		if self.spectrum:
 			semitones = self.spectrum.get_semitone()
 			brightness = self.spectrum.get_brightness()
-			pattern = cairo.LinearGradient(semitones[0]*self.rectwidth, 0, semitones[-1]*self.rectwidth, 0)
-
+#			pattern = cairo.LinearGradient(semitones[0]*self.rectwidth, 0, semitones[-1]*self.rectwidth, 0)
 			semitonerange = semitones[-1]-semitones[0]
+			pattern = cairo.LinearGradient(0, 0, semitonerange*self.rectwidth, 0)
+#-2536.21737162 2032.8887915
+#			print semitones[0]*self.rectwidth, semitones[-1]*self.rectwidth
+
+#			a440_pos = -1./semitonerange*semitones[0]
+#			print a440_pos
+#			a440_pos = 2./3.
+#			pattern.add_color_stop_rgb( a440_pos-0.001, 1,1,1)
+#			pattern.add_color_stop_rgb( a440_pos, 0,0,0)
+#			pattern.add_color_stop_rgb( a440_pos+0.001, 1,1,1)
 
 			for i in xrange(len(semitones)):
 				b = brightness[i]
 				pattern.add_color_stop_rgb( ( semitones[i]-semitones[0] ) / semitonerange, b,b,b)
+				if b==min(brightness):
+					print "max",b,"at",semitone_to_frequency(semitones[i]),"Hz, semitone",semitones[i],",position in pattern", ( semitones[i]-semitones[0] ) / semitonerange
+
+			matrix = pattern.get_matrix()
+			matrix.translate(-self.paddingx-0.5*self.rectwidth - semitones[0]*self.rectwidth, 0)
 		else:
 			pattern = cairo.SolidPattern(1., 1., 1.)
+			matrix = pattern.get_matrix()
 
-		matrix = pattern.get_matrix()
+		# move reference frequency to middle of first fret
 
 		for string,semitone in self.strings.iteritems():
 			matrix_copy = cairo.Matrix() * matrix
-			matrix_copy.translate(self.rectwidth*semitone - self.rectwidth/2.,0)
+#			matrix_copy.translate(0.5*self.rectwidth + 6*self.rectwidth,0)
+#			matrix_copy.translate(-semitone*self.rectwidth, 0)
+#			matrix_copy.translate(- self.rectwidth * (semitone-0.5),0)
+#			matrix_copy.translate(self.rectwidth*(-semitone) - self.rectwidth/2.,0)
+#			print string,self.rectwidth*semitone - self.rectwidth/2.
 			
 			pattern.set_matrix(matrix_copy)
 			
