@@ -40,6 +40,27 @@ def draw(ctx):
 	ctx.set_source(pattern)
 	ctx.fill()
 
+	gradient_width = 20
+	pattern = cairo.LinearGradient(0, 0, 2*gradient_width, 0)
+	pattern.add_color_stop_rgb(.5*(pos/1000.-3)/gradient_width,1,1,1)
+	pattern.add_color_stop_rgb(.5*(pos/1000.)/gradient_width,0,0,0)
+	pattern.add_color_stop_rgb(.5*(pos/1000.+3)/gradient_width,1,1,1)
+	ctx.rectangle(0,60,100,30)
+	m = pattern.get_matrix()
+	m.scale(1000.,1.)
+	pattern.set_matrix(m)
+	ctx.set_source(pattern)
+	ctx.fill()
+
+	gradient_width = 600
+	pattern = cairo.LinearGradient(-gradient_width, 0, gradient_width, 0)
+	pattern.add_color_stop_rgb(.5*(gradient_width+pos-3)/gradient_width,1,1,1)
+	pattern.add_color_stop_rgb(.5*(gradient_width+pos)/gradient_width,0,0,0)
+	pattern.add_color_stop_rgb(.5*(gradient_width+pos+3)/gradient_width,1,1,1)
+	ctx.rectangle(0,90,100,30)
+	ctx.set_source(pattern)
+	ctx.fill()
+
 surface = cairo.ImageSurface (cairo.FORMAT_ARGB32, 400,400)
 context = cairo.Context(surface)
 draw(context)
