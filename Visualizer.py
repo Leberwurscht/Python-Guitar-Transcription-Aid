@@ -2,9 +2,53 @@
 
 import gtk, numpy, cairo
 import spectrumvisualizer, peakdetector
+import gst
 
 REFERENCE_FREQUENCY = 440
 standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
+note_names = ["a","ais","b","c","cis","d","dis","e","f","fis","g","gis"]
+
+class CompareWindow(gtk.Window):
+	def __init__(self, *args, **kwargs):
+		if "strings" in kwargs:
+			self.strings = kwargs["strings"]
+			del kwargs["strings"]
+		else:
+			self.strings = standard_tuning
+
+		if "frets" in kwargs:
+			self.frets = kwargs["frets"]
+			del kwargs["frets"]
+		else:
+			self.frets = 12
+
+		gtk.Window.__init__(self,*args,**kwargs)
+
+		self.table = gtk.Table(len(self.strings), self.frets)
+		self.add(self.table)
+
+		for string,tuning in self.strings.iteritems():
+			for fret in xrange(self.frets+1):
+				semitone = tuning+fret
+				name = note_names[(semitone+1000*12) % 12]
+				btn = gtk.Button(name)
+				btn.set_size_request(40,30)
+				if fret==0: btn.set_relief(gtk.RELIEF_NONE)
+				frq = semitone_to_frequency(semitone)
+				btn.connect("pressed",self.press,frq)
+				btn.connect("released",self.release)
+				btn.set_tooltip_text(str(frq))
+				self.table.attach(btn,fret,fret+1,string-1,string)
+
+		self.show_all()
+
+		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! gconfaudiosink")
+
+	def press(self,btn,frq):
+		self.pipeline.get_by_name("src").set_property("freq", frq)
+		self.pipeline.set_state(gst.STATE_PLAYING)
+	def release(self,semitone):
+		self.pipeline.set_state(gst.STATE_NULL)
 
 def integrate(x, y, lower_limit, upper_limit):
 #	center_frequency = REFERENCE_FREQUENCY * 1.0594630943592953**semitone
@@ -53,13 +97,13 @@ def integrate(x, y, lower_limit, upper_limit):
 	int_x = numpy.zeros(upper_right_index-lower_right_index + 2)
 	int_y = numpy.zeros(upper_right_index-lower_right_index + 2)
 
-	int_x[0] += lower_limit
-	int_x[1:-1] += x[lower_right_index:upper_right_index]
-	int_x[-1] += upper_limit
+	int_x[0] = lower_limit
+	int_x[1:-1] = x[lower_right_index:upper_right_index]
+	int_x[-1] = upper_limit
 
-	int_y[0] += lower_limit_interpolated
-	int_y[1:-1] += y[lower_right_index:upper_right_index]
-	int_y[-1] += upper_limit_interpolated
+	int_y[0] = lower_limit_interpolated
+	int_y[1:-1] = y[lower_right_index:upper_right_index]
+	int_y[-1] = upper_limit_interpolated
 
 	r = numpy.trapz(int_y, int_x)
 
@@ -81,6 +125,104 @@ class VisualizerWindow(gtk.Window):
 	def delete(self, *args):
 		self.vislist.remove(self)
 		return False
+
+def power_to_magnitude(power, threshold=-60):
+	magnitudes = numpy.maximum(threshold, 10.0*numpy.log10(power))
+	return magnitudes
+
+def magnitude_to_power(magnitude):
+	power = 10.0**(magnitudes/10.0)
+	return power
+
+def frequency_to_semitone(frequency):
+	semitone = 12.*numpy.log2(frequency/REFERENCE_FREQUENCY)
+	return semitone
+
+def semitone_to_frequency(semitone):
+	frequency = REFERENCE_FREQUENCY * 2.**(semitone/12.)
+	return frequency
+
+class SpectrumData:
+	""" holds data for visualizers, calculates and caches different scales """
+	def __init__(self, frequency, **kwargs):
+		self.frequency = frequency
+		self.power = None
+		self.magnitude = None
+		self.brightness = None
+		self.semitone = None
+
+		if "method" in kwargs:
+			self.method = kwargs["method"]
+		else:
+			self.method = "from_magnitude"
+
+		if self.method=="from_magnitude":
+			if "min_magnitude" in kwargs:
+				self.min_magnitude = kwargs["min_magnitude"]
+			else:
+				self.min_magnitude = -60.
+
+			if "max_magnitude" in kwargs:
+				self.max_magnitude = kwargs["max_magnitude"]
+			else:
+				self.max_magnitude = 0.
+		elif self.method=="from_power":
+			if "min_power" in kwargs:
+				self.min_power= kwargs["min_power"]
+			else:
+				self.min_power= 0.0
+
+			if "max_power" in kwargs:
+				self.max_power= kwargs["max_power"]
+			else:
+				self.max_power= 0.001
+
+		if "magnitude" in kwargs:
+			self.magnitude = kwargs["magnitude"]
+		elif "power" in kwargs:
+			self.power = kwargs["power"]
+		else:
+			raise Exception, "Need magnitude or power as keyword argument"
+
+	def get_semitone(self):
+		if self.semitone==None: self.semitone = frequency_to_semitone(self.frequency)
+		return self.semitone
+
+	def get_magnitude(self):
+		if self.magnitude==None: self.magnitude = power_to_magnitude(self.power)
+		return self.magnitude
+
+	def get_power(self):
+		if self.power==None: self.power = magnitude_to_power(self.magnitude)
+		return self.power
+
+	def get_brightness(self):
+		if self.brightness==None:
+			if self.method=="from_magnitude":
+				brightness_slope = - 1.0 / (self.max_magnitude - self.min_magnitude)
+				brightness_const = 1.0 * self.max_magnitude / (self.max_magnitude- self.min_magnitude)
+
+				brightness = brightness_slope * self.get_magnitude() + brightness_const
+				self.brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+			elif self.method=="from_power":
+				brightness_slope = - 1.0 / (self.max_power - self.min_power)
+				brightness_const = 1.0 * self.max_power/ (self.max_power - self.min_power)
+
+				brightness = brightness_slope * self.get_power() + brightness_const
+				self.brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+			else:
+				raise Exception, "invalid method"
+
+		return self.brightness
+
+		# spectrum element calculation for comparison:
+#		magnitude = max(threshold, dB)
+#		dB = 10.0 * log10(power)
+#		power = fft_result**2 / nfft**2
+#		nfft = len(data) = 2*bands - 2,
+#		bands=len(fft_result)
+#		fft_result = fft(hamming(data))
+#		len(fft_result) = len(data)/2+1 => len(data)=2*bands-2
 
 class Fretboard(gtk.DrawingArea):
 	def __init__(self,*args,**kwargs):
@@ -123,17 +265,24 @@ class Fretboard(gtk.DrawingArea):
 
 		self.set_size_request((self.frets+1)*self.rectwidth + 2*self.paddingx, len(self.strings)*self.rectheight + markerspace + 2*self.paddingy)
 
+		self.spectrum = None
+
+	def set_spectrum(self, spectrum):
+		self.spectrum = spectrum
+
 	def draw(self, widget, event):
 		context = widget.window.cairo_create()
 
-		if hasattr(self,"semitones"):
-			pattern = cairo.LinearGradient(self.semitones[0]*self.rectwidth, 0, self.semitones[-1]*self.rectwidth, 0)
+		if self.spectrum:
+			semitones = self.spectrum.get_semitone()
+			brightness = self.spectrum.get_brightness()
+			pattern = cairo.LinearGradient(semitones[0]*self.rectwidth, 0, semitones[-1]*self.rectwidth, 0)
 
-			semitonerange = self.semitones[-1]-self.semitones[0]
+			semitonerange = semitones[-1]-semitones[0]
 
-			for i in xrange(len(self.semitones)):
-				b = self.brightness[i]
-				pattern.add_color_stop_rgb( ( self.semitones[i]-self.semitones[0] ) / semitonerange, b,b,b)
+			for i in xrange(len(semitones)):
+				b = brightness[i]
+				pattern.add_color_stop_rgb( ( semitones[i]-semitones[0] ) / semitonerange, b,b,b)
 		else:
 			pattern = cairo.SolidPattern(1., 1., 1.)
 
@@ -224,6 +373,7 @@ class SingleString(Fretboard):
 		Fretboard.draw(self, widget, event)
 
 		return True
+
 		if not hasattr(self,"brightness"): return True
 
 #		power = 1.26**self.magnitudes # from dB to power

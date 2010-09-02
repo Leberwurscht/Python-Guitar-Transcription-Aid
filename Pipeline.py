@@ -4,13 +4,13 @@ import gst, gobject, array, numpy
 
 MAX_FFT_SAMPLES = 8192
 
-def get_power(data):
+def windowed_fft(data):
 	# apply window
-	window = numpy.hanning(len(data))
+	window = numpy.hamming(len(data))
 	data *= window
 
 	# fft
-	power = numpy.abs(numpy.fft.rfft(data))**2.
+	power = numpy.abs(numpy.fft.rfft(data))**2. / len(data)**2.
 
 	return power
 
@@ -121,7 +121,7 @@ class AppSinkPipeline(gst.Pipeline):
 
 		for i in xrange(ffts):
 				shift = int(0.5*i*samples)
-				power += get_power(data[ shift : shift+samples ])
+				power += windowed_fft(data[ shift : shift+samples ])
 
 		power /= ffts
 

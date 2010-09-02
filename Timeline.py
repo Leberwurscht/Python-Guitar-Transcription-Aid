@@ -260,7 +260,7 @@ class Timeline(goocanvas.Canvas):
 		# configure canvas
 		height = self.get_pts(self.project.pipeline.duration)
 		self.set_bounds(0,0,self.width,height)
-		self.set_size_request(self.width,height)
+		self.set_size_request(self.width,int(height))
 		self.connect("button_press_event",self.canvas_button_press)
 
 		root = self.get_root_item()

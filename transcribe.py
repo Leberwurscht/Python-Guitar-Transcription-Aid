@@ -176,6 +176,9 @@ class Transcribe:
 		w.show_all()
 		w.plot_spectrum(frq, power)
 
+	def compare(self,widget):
+		w = Visualizer.CompareWindow()
+
 	# glade callbacks - toolbar
 	def set_default_mode(self,widget):
 		if not widget.get_active(): return
@@ -265,21 +268,10 @@ class Transcribe:
 		start,duration = marker
 
 		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
-
-		power_max = 500.
-		power_min = 0.
-
-		semitones = 12. * numpy.log2(frq/Visualizer.REFERENCE_FREQUENCY)
-
-		brightness_slope = - 1.0 / (power_max - power_min)
-		brightness_const = 1.0 * power_max / (power_max - power_min)
-
-		brightness = brightness_slope * power + brightness_const
-		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+		spectrum = Visualizer.SpectrumData(frq, power=power)
 
 		for viswindow in self.visualizers:
-			viswindow.visualizer.semitones = semitones
-			viswindow.visualizer.brightness = brightness
+			viswindow.visualizer.set_spectrum(spectrum)
 			viswindow.visualizer.queue_draw()
 
 	def playback_marker_previous(self, *args):
@@ -332,18 +324,21 @@ class Transcribe:
 		magnitude_max = 0.
 
 		frequencies = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
-		semitones = 12. * numpy.log2(frequencies/Visualizer.REFERENCE_FREQUENCY)
+#		semitones = 12. * numpy.log2(frequencies/Visualizer.REFERENCE_FREQUENCY)
 		magnitudes = numpy.array(magnitudes)
 
-		brightness_slope = - 1.0 / (magnitude_max - threshold)
-		brightness_const = 1.0 * magnitude_max / (magnitude_max - threshold)
+#		brightness_slope = - 1.0 / (magnitude_max - threshold)
+#		brightness_const = 1.0 * magnitude_max / (magnitude_max - threshold)
 
-		brightness = brightness_slope * magnitudes + brightness_const
-		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+#		brightness = brightness_slope * magnitudes + brightness_const
+#		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+
+		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes)
 
 		for viswindow in self.visualizers:
-			viswindow.visualizer.semitones = semitones
-			viswindow.visualizer.brightness = brightness
+#			viswindow.visualizer.semitones = semitones
+#			viswindow.visualizer.brightness = brightness
+			viswindow.visualizer.set_spectrum(spectrum)
 			viswindow.visualizer.queue_draw()
 
 	# position marker callback

@@ -163,6 +163,14 @@
                         <signal name="activate" handler="open_plot"/>
                       </object>
                     </child>
+                    <child>
+                      <object class="GtkMenuItem" id="compare">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Compare</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="compare"/>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
