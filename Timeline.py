@@ -251,7 +251,7 @@ class Timeline(goocanvas.Canvas):
 		else: self.scale = 100
 
 		if "width" in kwargs: self.width = kwargs["width"]
-		else: self.width = 400
+		else: self.width = 450
 
 		# mode
 		self.mode = MODE_DEFAULT

@@ -334,7 +334,7 @@ class Transcribe:
 #		brightness = brightness_slope * magnitudes + brightness_const
 #		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 
-		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes)
+		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes, min_magnitude=threshold)
 
 		for viswindow in self.visualizers:
 #			viswindow.visualizer.semitones = semitones

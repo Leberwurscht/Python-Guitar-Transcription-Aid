@@ -173,22 +173,22 @@ class SpectrumData:
 			if "min_magnitude" in kwargs:
 				self.min_magnitude = kwargs["min_magnitude"]
 			else:
-				self.min_magnitude = -60.
+				self.min_magnitude = None #-60.
 
 			if "max_magnitude" in kwargs:
 				self.max_magnitude = kwargs["max_magnitude"]
 			else:
-				self.max_magnitude = 0.
+				self.max_magnitude = None #0.
 		elif self.method=="from_power":
 			if "min_power" in kwargs:
-				self.min_power= kwargs["min_power"]
+				self.min_power = kwargs["min_power"]
 			else:
-				self.min_power= 0.0
+				self.min_power = None #0.0
 
 			if "max_power" in kwargs:
-				self.max_power= kwargs["max_power"]
+				self.max_power = kwargs["max_power"]
 			else:
-				self.max_power= 0.001
+				self.max_power = None #0.001
 
 		if "magnitude" in kwargs:
 			self.magnitude = kwargs["magnitude"]
@@ -212,12 +212,22 @@ class SpectrumData:
 	def get_brightness(self):
 		if self.brightness==None:
 			if self.method=="from_magnitude":
+				if self.max_magnitude==None:
+					self.max_magnitude=numpy.max(self.get_magnitude())
+				if self.min_magnitude==None:
+					self.min_magnitude=numpy.min(self.get_magnitude())
+
 				brightness_slope = - 1.0 / (self.max_magnitude - self.min_magnitude)
 				brightness_const = 1.0 * self.max_magnitude / (self.max_magnitude- self.min_magnitude)
 
 				brightness = brightness_slope * self.get_magnitude() + brightness_const
 				self.brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 			elif self.method=="from_power":
+				if self.max_power==None:
+					self.max_power=numpy.max(self.get_power())
+				if self.min_power==None:
+					self.min_power=numpy.min(self.get_power())
+
 				brightness_slope = - 1.0 / (self.max_power - self.min_power)
 				brightness_const = 1.0 * self.max_power/ (self.max_power - self.min_power)
 
@@ -289,72 +299,27 @@ class Fretboard(gtk.DrawingArea):
 		if self.spectrum:
 			semitones = self.spectrum.get_semitone()
 			brightness = self.spectrum.get_brightness()
-#			pattern = cairo.LinearGradient(semitones[0]*self.rectwidth, 0, semitones[-1]*self.rectwidth, 0)
 			semitonerange = semitones[-1]-semitones[0]
 			pattern = cairo.LinearGradient(0, 0, semitonerange, 0)
-#-2536.21737162 2032.8887915
-#			print semitones[0]*self.rectwidth, semitones[-1]*self.rectwidth
-
-#			a440_pos = -1./semitonerange*semitones[0]
-#			print a440_pos
-#			print a440_pos
-#			a440_pos = 0.003
-#			pattern.add_color_stop_rgb( a440_pos-0.001, 1,1,1)
-#			pattern.add_color_stop_rgb( a440_pos, 0,0,0)
-#			pattern.add_color_stop_rgb( a440_pos+0.001, 1,1,1)
-
-#			pattern.add_color_stop_rgb( 0, 1,1,1)
-#			pattern.add_color_stop_rgb( 0.001, .2,.2,.2)
-#			pattern.add_color_stop_rgb( 0.999, .8,.8,.8)
-#			pattern.add_color_stop_rgb( 1, 1,1,1)
 
 			for i in xrange(len(semitones)):
 				b = brightness[i]
 				pattern.add_color_stop_rgb( ( semitones[i]-semitones[0] ) / semitonerange, b,b,b)
-#				if b==min(brightness):
-#					print "max",b,"at",semitone_to_frequency(semitones[i]),"Hz, semitone",semitones[i],",position in pattern", ( semitones[i]-semitones[0] ) / semitonerange
-#
+
 			matrix = pattern.get_matrix()
 			matrix.scale(1./self.rectwidth,1.)
 			matrix.translate(-self.paddingx-0.5*self.rectwidth, 0)
 			matrix.translate(-semitones[0]*self.rectwidth, 0)
 			pattern.set_matrix(matrix)
-#			matrix.translate(-self.paddingx-0.5*self.rectwidth - semitones[0]*self.rectwidth, 0)
 		else:
 			pattern = cairo.SolidPattern(1., 1., 1.)
 			matrix = pattern.get_matrix()
 
-#		# move reference frequency to middle of first fret
-
 		for string,semitone in self.strings.iteritems():
 			matrix_copy = cairo.Matrix() * matrix
-#			matrix_copy.translate(0.5*self.rectwidth + 6*self.rectwidth,0)
 			matrix_copy.translate(semitone*self.rectwidth, 0)
-#			matrix_copy.translate(- self.rectwidth * (semitone-0.5),0)
-#			matrix_copy.translate(self.rectwidth*(-semitone) - self.rectwidth/2.,0)
-#			print string,self.rectwidth*semitone - self.rectwidth/2.
-			
 			pattern.set_matrix(matrix_copy)
 
-			# create pattern
-			if self.spectrum and 0:
-				semitones = self.spectrum.get_semitone()
-
-				# get index for minimal/maximal semitone of this string
-				try:
-					min_idx = numpy.min(numpy.nonzero(semitones > semitone-0.5))-1
-				except ValueError:
-					min_idx = 0
-
-				try:
-					max_idx = numpy.max(numpy.nonzero(semitones < semitone+frets+1.5))+1
-				except ValueError:
-					max_idx = len(semitones)-1
-
-				pattern = cairo.LinearGradient(0, 0, semitonerange*self.rectwidth, 0)			
-#			else:
-#				pattern = cairo.SolidPattern(1., 1., 1.)
-			
 			for fret in xrange(self.frets+1):
 				context.rectangle(self.paddingx+fret*self.rectwidth, self.paddingy+self.rectheight*(string-1), self.rectwidth, self.rectheight)
 				context.set_source(pattern)
