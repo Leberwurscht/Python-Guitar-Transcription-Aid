@@ -1,0 +1,64 @@
+--> Sie sind jetzt im Gespräch über #gstreamer
+--- Thema für #gstreamer ist Good/Bad 0.10.17 are OUT | Current: Core 0.10.25, Base 0.10.25, Good 0.10.17, Ugly 0.10.13, Bad 0.10.17, FFMpeg 0.10.9, GNonLin 0.10.13 Python 0.10.17, OpenGL 0.10.1 | http://gstreamer.freedesktop.org/wiki | http://build.gstreamer.org
+ Thema für #gstreamer gesetzt durch __tim um Wed Dec 16 18:20:40 2009
+ #gstreamer :http://gstreamer.freedesktop.org
+--> wingo (n=wingo@ATuileries-153-1-1-129.w82-123.abo.wanadoo.fr) hat #gstreamer betreten
+<-- jkprg hat (Read error: 104 (Connection reset by peer)) beendet
+--> jkprg (n=jarda@r10ld239.net.upc.cz) hat #gstreamer betreten
+<-- _julian hat (Read error: 60 (Operation timed out)) beendet
+--> oleavr (n=oleavr@ti0104a340-0189.bb.online.no) hat #GStreamer betreten
+<-- gst-kaps hat ("Leaving.") beendet
+--> gcorvala (n=gcorvala@106.174-241-81.adsl-dyn.isp.belgacom.be) hat #gstreamer betreten
+<maxi_> hello, does anyone know how i can determine the samplerate of a stream that is going into for example the spectrum element?
+<wtay^> maxi_, you look at the caps on the sinkpad of the element
+<maxi_> but the caps can have a range of rates, it does not have a fixed rate, does it?
+<wtay^> it's always fixed when set on a pad
+<maxi_> ah
+ that helps
+ thank you
+ oh
+ i tried it and it displays a range
+--> gst-kaps (n=Kapil@122.170.27.22) hat #gstreamer betreten
+<maxi_> do i have to do something first to make it fixed? set the pipeline playing or something?
+<wtay^> maxi_, maybe you did gst_pad_get_caps(), which is not what you want
+<wtay^> you want g_object_get (pad, "caps", &caps, NULL);
+<maxi_> yes, this is what i did
+<wtay^> or connect to the caps property notify
+<maxi_> ah
+<wtay^> the negotiated caps are only available in paused/playing
+<maxi_> this sounds like what i want
+<wtay^> g_signal_connect (pad, "notify::caps", caps_changed_func, ...) or something
+ then you'll get a callback when the caps get negotiated
+<maxi_> ok
+<wtay^> if you reach the paused state, the caps are also negotiated
+<maxi_> ah
+ you helped me a lot
+<wtay^> gst_pad_get_caps() returns all possible things that can go over the pad (not what it's currently doing)
+ it should be renamed to gst_pad_get_possible_caps() or something
+<maxi_> and what is g_object_get (pad, "caps", &caps, NULL)
+<wtay^> that's to get the currently negotiated caps on a pad
+ we don't have a method for that...
+ or GST_PAD_CAPS(pad).. (but then it needs to be called inside the pad object lock to be safe)
+ (or from the streaming thread)
+<maxi_> but this only works if the pipeline is also set to playing or paused?
+<wtay^> yes, there is no caps negotiation else
+<maxi_> ok, so the cleanest way to do it is propably with a signal
+<wtay^> that's the most flexible, but be aware that the signal is called from a streaming thread..
+ another easy way is to set the pipeline to PAUSED, then wait until it reaches the PAUSED state and then just read the caps
+<maxi_> what advantage has this?
+<wtay^> that you don't need to mess with mutexes and stuff
+<maxi_> ahm
+ i write my program in python, and i hope i don't have to use mutexes when i connect callbacks to signals
+<wtay^> maybe not..
+<maxi_> are callbacks for notify::caps handled in a other way than callbacks for for example pad-added?
+<-- TheNewAndy hat ("Ex-Chat") beendet
+<maxi_> i mean, are these callbacks called from another threading context?
+<wtay^> maxi_, no, it's the same
+ maxi_, pad-added is also called from a streaming thread
+<maxi_> ah, ok, so i propably don't have to care of mutexes, do i?
+<wtay^> maybe not in python because there is a global lock that only allows one thread to execute python code
+<-- jkprg hat () beendet
+<maxi_> ah ok
+ thank you
+<wtay^> np
+<-- kkito hat (Ping timeout: 180 seconds) beendet

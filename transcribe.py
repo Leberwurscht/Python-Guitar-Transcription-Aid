@@ -5,7 +5,7 @@ gobject.threads_init()
 
 import sys
 
-import Project, Visualizer, Analyze
+import Project, Visualizer, Analyze, Timeline
 import numpy
 
 class Transcribe:
@@ -13,6 +13,7 @@ class Transcribe:
 		self.visualizers = []
 		self.autoupdate = False
 		self.project = None
+		self.mode_change_handler = None
 
 		# create gui
 		self.builder = gtk.Builder()
@@ -48,11 +49,13 @@ class Transcribe:
 		if self.project: return False
 
 		project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
-#		project.timeline.ruler.set_playback_marker_changed_cb(self.update_playback_marker)
+		self.mode_change_handler = project.timeline.connect("notify::mode", self.mode_changed)
+		self.builder.get_object("position").set_adjustment(project.timeline.ruler.marker_start)
+		self.builder.get_object("duration").set_adjustment(project.timeline.ruler.marker_duration)
 		self.builder.get_object("timelinecontainer").add(project.timeline)
-#		self.builder.get_object("timelinecontainer").pack_start(project.timeline, False, False)
 
 		self.project = project
+
 		return True
 
 	# glade callbacks - file menu
@@ -184,18 +187,21 @@ class Transcribe:
 	def set_default_mode(self,widget):
 		if not widget.get_active(): return
 
+		# set mode without triggering notify event because radiobutton is up to date
 		self.project.timeline.mode=Project.Timeline.MODE_DEFAULT
 
 	def insert_annotation(self,widget):
 		if not self.project: return
 		if not widget.get_active(): return
 
+		# set mode without triggering notify event because radiobutton is up to date
 		self.project.timeline.mode=Project.Timeline.MODE_ANNOTATE
 
 	def delete_item(self,widget):
 		if not self.project: return
 		if not widget.get_active(): return
 
+		# set mode without triggering notify event because radiobutton is up to date
 		self.project.timeline.mode=Project.Timeline.MODE_DELETE
 
 	def insert_marker(self,widget):
@@ -287,7 +293,6 @@ class Transcribe:
 
 		self.project.timeline.ruler.set_playback_marker(start, duration)
 		self.update_playback_marker_spinbuttons()
-#		self.update_playback_marker()
 
 	def playback_marker_next(self, *args):
 		if not self.project: return
@@ -300,7 +305,6 @@ class Transcribe:
 
 		self.project.timeline.ruler.set_playback_marker(start, duration)
 		self.update_playback_marker_spinbuttons()
-#		self.update_playback_marker()
 
 	# glade callbacks - radioboxes
 	def playback_marker_radioboxes_changed(self,widget):
@@ -310,13 +314,24 @@ class Transcribe:
 		duration = self.builder.get_object("duration").get_value()
 		self.project.timeline.ruler.set_playback_marker(start,duration)
 
-	# playback marker spinbuttons are updated by Timeline
-	def update_playback_marker_spinbuttons(self):
+	# update spinbuttons when playback marker is moved
+	def update_playback_marker_spinbuttons(self,*args):
 		if not self.project: return
 
 		start,duration = self.project.timeline.ruler.get_playback_marker()
 		self.builder.get_object("position").set_value(start)
 		self.builder.get_object("duration").set_value(duration)
+
+	# update radiobuttons when mode is changed by timeline
+	def mode_changed(self,timeline,pspec):
+		if not self.project: return
+
+		if timeline.props.mode==Timeline.MODE_DEFAULT:
+			self.project.transcribe.builder.get_object("mode_default").set_active(True)
+		elif timeline.props.mode==Timeline.MODE_ANNOTATE:
+			self.project.transcribe.builder.get_object("mode_annotate").set_active(True)
+		elif timeline.props.mode==Timeline.MODE_DELETE:
+			self.project.transcribe.builder.get_object("mode_delete").set_active(True)
 
 	# spectrumlistener callback
 	def on_magnitudes(self, spectrumlistener, bands, rate, threshold, magnitudes):
@@ -325,20 +340,11 @@ class Transcribe:
 		magnitude_max = 0.
 
 		frequencies = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
-#		semitones = 12. * numpy.log2(frequencies/Visualizer.REFERENCE_FREQUENCY)
 		magnitudes = numpy.array(magnitudes)
-
-#		brightness_slope = - 1.0 / (magnitude_max - threshold)
-#		brightness_const = 1.0 * magnitude_max / (magnitude_max - threshold)
-
-#		brightness = brightness_slope * magnitudes + brightness_const
-#		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 
 		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes, min_magnitude=threshold)
 
 		for viswindow in self.visualizers:
-#			viswindow.visualizer.semitones = semitones
-#			viswindow.visualizer.brightness = brightness
 			viswindow.visualizer.set_spectrum(spectrum)
 			viswindow.visualizer.queue_draw()
 

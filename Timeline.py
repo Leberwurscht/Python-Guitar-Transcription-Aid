@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
+import gobject
 import gtk
 import goocanvas
 
 # click modes
-MODE_DEFAULT, MODE_ANNOTATE, MODE_DELETE = xrange(3)
+MODES_NUM = 3
+MODE_DEFAULT, MODE_ANNOTATE, MODE_DELETE = xrange(MODES_NUM)
 
 class TimelineItem(goocanvas.Group):
 	def __init__(self, timeline, *args, **kwargs):
@@ -38,7 +40,7 @@ class TimelineItem(goocanvas.Group):
 	def button_press(self, item, target, event):
 		if not event.button==1: return True
 
-		if self.timeline.mode==MODE_DEFAULT:
+		if self.timeline.props.mode==MODE_DEFAULT:
 			if self.motion_handler_id:
 				self.handler_disconnect(self.motion_handler_id)
 				self.motion_handler_id = None
@@ -58,12 +60,11 @@ class TimelineItem(goocanvas.Group):
 
 			return False
 
-		elif self.timeline.mode==MODE_DELETE:
+		elif self.timeline.props.mode==MODE_DELETE:
 			self.delete_item()
 			self.remove()
 			self.timeline.project.touch()
-			self.timeline.mode=MODE_DEFAULT
-			self.timeline.project.transcribe.builder.get_object("mode_default").set_active(True)
+			self.timeline.props.mode=MODE_DEFAULT
 
 			return False
 
@@ -129,7 +130,7 @@ class Marker(TimelineItem):
 
 	def clicked(self):
 		self.timeline.ruler.set_playback_marker(self.get_start(), self.get_duration())
-		self.timeline.project.transcribe.update_playback_marker_spinbuttons()
+#		self.timeline.project.transcribe.update_playback_marker_spinbuttons()
 #		self.timeline.ruler.playback_marker_changed_cb()
 
 class Annotation(TimelineItem):
@@ -143,6 +144,9 @@ class Annotation(TimelineItem):
 
 	def delete_item(self):
 		self.timeline.annotations.remove(self)
+
+class Tabulature(goocanvas.Group):
+	pass
 
 class Ruler(goocanvas.Group):
 	def __init__(self, timeline, project, **kwargs):
@@ -164,11 +168,23 @@ class Ruler(goocanvas.Group):
 
 		# labelling
 		for i in xrange(int(project.pipeline.duration)):
-			goocanvas.Text(parent=self, text=str(1.0*i), y=timeline.get_pts(i))
+			goocanvas.Text(parent=self, text=str(1.0*i), y=timeline.get_pts(i), pointer_events=0)
 
-		# playback_marker
+		# playback marker
 		self.playback_marker = goocanvas.Rect(parent=self, width=width, height=0, visibility=goocanvas.ITEM_INVISIBLE, fill_color_rgba=0x00000044)
 		self.playback_marker.props.pointer_events = 0 # let self.rect receive pointer events
+
+		# playback marker adjustments
+		self.marker_start = gtk.Adjustment(0, 0, project.pipeline.duration, 0.01)
+		self.marker_duration = gtk.Adjustment(0, 0, project.pipeline.duration, 0.01)
+		self.start_handler = self.marker_start.connect("value-changed", self.start_changed)
+		self.duration_handler = self.marker_duration.connect("value-changed", self.duration_changed)
+
+	def start_changed(self,adjustment):
+		self.playback_marker.props.y = self.timeline.get_pts(self.marker_start.get_value())
+
+	def duration_changed(self,adjustment):
+		self.playback_marker.props.height = self.timeline.get_pts(self.marker_duration.get_value())
 
 	# playback marker
 	def button_press (self, item, target, event):
@@ -207,10 +223,16 @@ class Ruler(goocanvas.Group):
 			self.playback_marker.props.y = event.y
 			self.playback_marker.props.height = y - event.y
 
+		# update adjustments
+		self.marker_start.handler_block(self.start_handler)
+		self.marker_duration.handler_block(self.duration_handler)
+		self.marker_start.set_value(self.timeline.get_seconds(self.playback_marker.props.y))
+		self.marker_duration.set_value(self.timeline.get_seconds(self.playback_marker.props.height))
+		self.marker_start.handler_unblock(self.start_handler)
+		self.marker_duration.handler_unblock(self.duration_handler)
+
 		# make marker visible
 		self.playback_marker.props.visibility = goocanvas.ITEM_VISIBLE
-
-		self.timeline.project.transcribe.update_playback_marker_spinbuttons()
 
 		return True
 
@@ -232,18 +254,22 @@ class Ruler(goocanvas.Group):
 	def get_playback_marker(self):
 		if not self.playback_marker.props.visibility==goocanvas.ITEM_VISIBLE: return None
 
-		start,duration = self.timeline.get_seconds(self.playback_marker.props.y, self.playback_marker.props.height)
+#		start,duration = self.timeline.get_seconds(self.playback_marker.props.y, self.playback_marker.props.height)
 
-		return start, duration
+		return self.marker_start.get_value(), self.marker_duration.get_value()
 
 	def set_playback_marker(self,start,duration):
-		self.playback_marker.props.y = self.timeline.get_pts(start)
-		self.playback_marker.props.height = self.timeline.get_pts(duration)
+		self.marker_start.set_value(start)
+		self.marker_duration.set_value(duration)
 		self.playback_marker.props.visibility = goocanvas.ITEM_VISIBLE
+#		self.playback_marker.props.y = self.timeline.get_pts(start)
+#		self.playback_marker.props.height = self.timeline.get_pts(duration)
 
 class Timeline(goocanvas.Canvas):
+	__gproperties__ = {"mode":(gobject.TYPE_INT, "mode", "editing mode", 0, MODES_NUM-1, MODE_DEFAULT, gobject.PARAM_READWRITE)}
+
 	def __init__(self, project, **kwargs):
-		goocanvas.Canvas.__init__(self)
+		goocanvas.Canvas.__gobject_init__(self)
 
 		self.project = project
 
@@ -255,7 +281,6 @@ class Timeline(goocanvas.Canvas):
 
 		# mode
 		self.mode = MODE_DEFAULT
-		self.project.transcribe.builder.get_object("mode_default").set_active(True)
 
 		# configure canvas
 		height = self.get_pts(self.project.pipeline.duration)
@@ -279,6 +304,13 @@ class Timeline(goocanvas.Canvas):
 		self.annotations = []
 		self.markers = []
 
+	# custom properties
+	def do_get_property(self,pspec):
+		return getattr(self, pspec.name)
+
+	def do_set_property(self,pspec,value):
+		setattr(self, pspec.name, value)
+
 	# unit conversion
 	def get_pts(self,*args):
 		r = [1.*self.scale*seconds for seconds in args]
@@ -296,7 +328,7 @@ class Timeline(goocanvas.Canvas):
 
 	# space events
 	def canvas_button_press(self,widget,event):
-		if self.mode==MODE_ANNOTATE:
+		if self.props.mode==MODE_ANNOTATE:
 			dialog = gtk.Dialog(title="Text", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
 			entry = gtk.Entry()
 			dialog.vbox.add(entry)
@@ -308,7 +340,8 @@ class Timeline(goocanvas.Canvas):
 				self.project.touch()
 			dialog.destroy()
 
-			self.mode=MODE_DEFAULT
-			self.project.transcribe.builder.get_object("mode_default").set_active(True)
+			self.props.mode=MODE_DEFAULT
 
 			return True
+
+gobject.type_register(Timeline)
