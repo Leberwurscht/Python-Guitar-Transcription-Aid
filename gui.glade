@@ -133,9 +133,9 @@
               </object>
             </child>
             <child>
-              <object class="GtkMenuItem" id="analyze">
+              <object class="GtkMenuItem" id="windows">
                 <property name="visible">True</property>
-                <property name="label" translatable="yes">Analyze</property>
+                <property name="label" translatable="yes">Windows</property>
                 <property name="use_underline">True</property>
                 <child type="submenu">
                   <object class="GtkMenu" id="menu4">
@@ -146,6 +146,14 @@
                         <property name="label" translatable="yes">Fretboard</property>
                         <property name="use_underline">True</property>
                         <signal name="activate" handler="open_fretboard"/>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem" id="menuitem5">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">TotalFretboard</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="open_total"/>
                       </object>
                     </child>
                     <child>
@@ -321,9 +329,61 @@
                 <property name="homogeneous">True</property>
               </packing>
             </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkToolbar" id="toolbar2">
+            <property name="visible">True</property>
             <child>
-              <object class="GtkSeparatorToolItem" id="toolbutton1">
+              <object class="GtkToolButton" id="tap">
                 <property name="visible">True</property>
+                <property name="label" translatable="yes">Tap</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">appointment-soon</property>
+                <signal name="clicked" handler="tap"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="insert_marker">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Insert marker</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">list-add</property>
+                <signal name="clicked" handler="insert_marker"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="toolbutton3">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Clear Taps</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">list-remove</property>
+                <signal name="clicked" handler="clear_taps"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="toolbutton2">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Insert Tabulature Marker</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">insert-object</property>
+                <signal name="clicked" handler="insert_tab_marker"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -357,12 +417,77 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToolButton" id="insert_marker">
+              <object class="GtkToolButton" id="toolbutton1">
                 <property name="visible">True</property>
-                <property name="label" translatable="yes">Insert marker</property>
+                <property name="label" translatable="yes">Top align marker</property>
                 <property name="use_underline">True</property>
-                <property name="icon_name">list-add</property>
-                <signal name="clicked" handler="insert_marker"/>
+                <property name="icon_name">go-last</property>
+                <signal name="clicked" handler="top_align"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="toolbutton4">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Bottom align marker</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">go-first</property>
+                <signal name="clicked" handler="bottom_align"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="toolbutton5">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">divide in halves</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">media-seek-backward</property>
+                <signal name="clicked" handler="divide"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="toolbutton6">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">double</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">media-seek-forward</property>
+                <signal name="clicked" handler="double"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="toolbutton7">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Find beats</property>
+                <property name="use_underline">True</property>
+                <property name="icon_name">emblem-important</property>
+                <signal name="clicked" handler="find_beats"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToolButton" id="toolbutton8">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">test</property>
+                <property name="use_underline">True</property>
+                <property name="stock_id">gtk-dialog-question</property>
+                <signal name="clicked" handler="test"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -372,7 +497,7 @@
           </object>
           <packing>
             <property name="expand">False</property>
-            <property name="position">1</property>
+            <property name="position">2</property>
           </packing>
         </child>
         <child>
@@ -394,6 +519,8 @@
                 <property name="can_focus">True</property>
                 <property name="invisible_char">&#x25CF;</property>
                 <property name="adjustment">adjustment1</property>
+                <property name="climb_rate">0.01</property>
+                <property name="digits">2</property>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -446,10 +573,119 @@
                 <property name="position">5</property>
               </packing>
             </child>
+            <child>
+              <object class="GtkToggleButton" id="cutoff_button">
+                <property name="label" translatable="yes">Cutoff</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="tooltip_text" translatable="yes">Cutoff magnitude for visualizers</property>
+                <signal name="toggled" handler="cutoff_toggle"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">6</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="cutoff">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="editable">False</property>
+                <property name="invisible_char">&#x25CF;</property>
+                <property name="adjustment">adjustment2</property>
+                <property name="digits">1</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">7</property>
+              </packing>
+            </child>
           </object>
           <packing>
             <property name="expand">False</property>
-            <property name="position">2</property>
+            <property name="position">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkHBox" id="hbox2">
+            <property name="visible">True</property>
+            <child>
+              <object class="GtkLabel" id="label4">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Decay time</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="decay">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="invisible_char">&#x25CF;</property>
+                <property name="adjustment">adjustment3</property>
+                <property name="climb_rate">0.01</property>
+                <property name="digits">2</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="label5">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">delta t</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="delta_t">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="invisible_char">&#x25CF;</property>
+                <property name="adjustment">adjustment4</property>
+                <property name="climb_rate">0.01</property>
+                <property name="digits">2</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="label6">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">peak height</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">4</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSpinButton" id="beat_separation">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="invisible_char">&#x25CF;</property>
+                <property name="adjustment">adjustment5</property>
+                <property name="digits">4</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="position">5</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="position">4</property>
           </packing>
         </child>
         <child>
@@ -464,18 +700,37 @@
             </child>
           </object>
           <packing>
-            <property name="position">3</property>
+            <property name="position">5</property>
           </packing>
         </child>
       </object>
     </child>
   </object>
-  <object class="GtkAction" id="action1"/>
   <object class="GtkAdjustment" id="adjustment1">
-    <property name="value">40.179999995976686</property>
-    <property name="lower">1</property>
+    <property name="value">1</property>
+    <property name="lower">0.01</property>
+    <property name="upper">10</property>
+    <property name="step_increment">0.01</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment2">
+    <property name="lower">-100</property>
     <property name="upper">100</property>
-    <property name="step_increment">1</property>
+    <property name="step_increment">0.10000000000000001</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment3">
+    <property name="upper">100</property>
+    <property name="step_increment">0.01</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment4">
+    <property name="upper">1</property>
+    <property name="step_increment">0.01</property>
+    <property name="page_increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="adjustment5">
+    <property name="upper">100</property>
+    <property name="step_increment">0.0001</property>
     <property name="page_increment">10</property>
     <property name="page_size">10</property>
   </object>

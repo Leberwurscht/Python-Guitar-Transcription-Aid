@@ -8,6 +8,24 @@ REFERENCE_FREQUENCY = 440
 standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
 note_names = ["a","ais","b","c","cis","d","dis","e","f","fis","g","gis"]
 
+#class RhythmWindow(gtk.Window):
+#	def __init__(self,project,**kwargs):
+#		gtk.Window.__init__(self,**kwargs)
+#
+#		self.project = project
+#
+#		button = gtk.Button("Tap")
+#		button.connect("pressed", self.tap)
+#		button.connect("key-press-event", self.tap)
+#		button.set_size_request(100,60)
+#		self.add(button)
+#		self.show_all()
+#
+#	def tap(self,*args):
+#		if not self.project: return
+#
+#		self.project.timeline.rhythm.add_tap()
+
 class CompareWindow(gtk.Window):
 	def __init__(self, *args, **kwargs):
 		if "strings" in kwargs:
@@ -144,7 +162,7 @@ def power_to_magnitude(power, threshold=-60):
 	return magnitudes
 
 def magnitude_to_power(magnitude):
-	power = 10.0**(magnitudes/10.0)
+	power = 10.0**(magnitude/10.0)
 	return power
 
 def frequency_to_semitone(frequency):
@@ -189,6 +207,8 @@ class SpectrumData:
 				self.max_power = kwargs["max_power"]
 			else:
 				self.max_power = None #0.001
+		else:
+			raise Exception, "invalid method"
 
 		if "magnitude" in kwargs:
 			self.magnitude = kwargs["magnitude"]
@@ -233,10 +253,21 @@ class SpectrumData:
 
 				brightness = brightness_slope * self.get_power() + brightness_const
 				self.brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
-			else:
-				raise Exception, "invalid method"
 
 		return self.brightness
+
+	def get_total_power_in_semitone_range(self,lower,upper,overtones=10):
+		l = semitone_to_frequency(lower)
+		u = semitone_to_frequency(upper)
+		return self.get_total_power_in_frequency_range(l,u,overtones)
+
+	def get_total_power_in_frequency_range(self,lower,upper,overtones=10):
+		total = 0
+
+		for i in xrange(overtones+1):
+			total += integrate(self.frequency, self.get_power(), lower*(i+1), upper*(i+1))
+
+		return total
 
 		# spectrum element calculation for comparison:
 #		magnitude = max(threshold, dB)
@@ -296,33 +327,16 @@ class Fretboard(gtk.DrawingArea):
 	def draw(self, widget, event):
 		context = widget.window.cairo_create()
 
-		if self.spectrum:
-			semitones = self.spectrum.get_semitone()
-			brightness = self.spectrum.get_brightness()
-			semitonerange = semitones[-1]-semitones[0]
-			pattern = cairo.LinearGradient(0, 0, semitonerange, 0)
-
-			for i in xrange(len(semitones)):
-				b = brightness[i]
-				pattern.add_color_stop_rgb( ( semitones[i]-semitones[0] ) / semitonerange, b,b,b)
-
-			matrix = pattern.get_matrix()
-			matrix.scale(1./self.rectwidth,1.)
-			matrix.translate(-self.paddingx-0.5*self.rectwidth, 0)
-			matrix.translate(-semitones[0]*self.rectwidth, 0)
-			pattern.set_matrix(matrix)
-		else:
-			pattern = cairo.SolidPattern(1., 1., 1.)
-			matrix = pattern.get_matrix()
+		# build pattern
+		prepared_fretboard = self.prepare_fretboard()
+#		matrix, pattern = self.prepare_patterns()
 
 		for string,semitone in self.strings.iteritems():
-			matrix_copy = cairo.Matrix() * matrix
-			matrix_copy.translate(semitone*self.rectwidth, 0)
-			pattern.set_matrix(matrix_copy)
+			prepared_string = self.prepare_string(semitone,prepared_fretboard)
 
 			for fret in xrange(self.frets+1):
 				context.rectangle(self.paddingx+fret*self.rectwidth, self.paddingy+self.rectheight*(string-1), self.rectwidth, self.rectheight)
-				context.set_source(pattern)
+				self.set_fill_source(context,semitone,fret,prepared_fretboard,prepared_string)
 				context.fill_preserve()
 
 				context.set_line_width(3)
@@ -351,6 +365,84 @@ class Fretboard(gtk.DrawingArea):
 		context.line_to(self.paddingx+self.rectwidth*.3,self.paddingy+self.rectheight*len(self.strings))
 		context.stroke()
 
+	def set_fill_source(self,context,semitone,fret,prepared_fretboard,prepared_string):
+		matrix, pattern = prepared_fretboard
+		context.set_source(pattern)
+
+	def prepare_fretboard(self):
+		if self.spectrum:
+			semitones = self.spectrum.get_semitone()
+			brightness = self.spectrum.get_brightness()
+			semitonerange = semitones[-1]-semitones[0]
+			pattern = cairo.LinearGradient(0, 0, semitonerange, 0)
+
+			for i in xrange(len(semitones)):
+				b = brightness[i]
+				pattern.add_color_stop_rgb( ( semitones[i]-semitones[0] ) / semitonerange, b,b,b)
+
+			matrix = pattern.get_matrix()
+			matrix.scale(1./self.rectwidth,1.)
+			matrix.translate(-self.paddingx-0.5*self.rectwidth, 0)
+			matrix.translate(-semitones[0]*self.rectwidth, 0)
+			pattern.set_matrix(matrix)
+		else:
+			pattern = cairo.SolidPattern(1., 1., 1.)
+			matrix = pattern.get_matrix()
+
+		return matrix, pattern
+
+	def prepare_string(self, semitone, prepared_fretboard):
+		matrix, pattern = prepared_fretboard
+		matrix_copy = cairo.Matrix() * matrix
+		matrix_copy.translate(semitone*self.rectwidth, 0)
+		pattern.set_matrix(matrix_copy)
+
+		return None
+
+class TotalFretboard(Fretboard):
+	def __init__(self,*args,**kwargs):
+		if "overtones" in kwargs: self.overtones = kwargs["overtones"]
+		else: self.overtones = 10
+
+		Fretboard.__init__(self,*args,**kwargs)
+
+	def prepare_fretboard(self):
+		if not self.spectrum: return
+
+		total = []
+
+		min_semitone = min(self.strings.values())
+
+		for semitone in xrange(min_semitone, max(self.strings.values())+self.frets+1):
+			total.append( self.spectrum.get_total_power_in_semitone_range(semitone-0.5,semitone+0.5,self.overtones) )
+
+		return min_semitone, total
+
+	def prepare_string(self, semitone, prepared_fretboard):
+		if not self.spectrum: return
+
+		min_semitone, total = prepared_fretboard
+
+		# get maximum total power on fretboard
+		max_power = max(total)
+#		# get maximum total power on string
+#		max_power = max(total[ semitone-min_semitone : semitone-min_semitone+self.frets ])
+		min_power=0
+		brightness_slope = - 1.0 / (max_power - min_power)
+		brightness_const = 1.0 * max_power/ (max_power - min_power)
+
+		return brightness_slope, brightness_const
+
+	def set_fill_source(self,context,semitone,fret,prepared_fretboard,prepared_string):
+		if not self.spectrum: return
+			
+		min_semitone, total = prepared_fretboard
+		brightness_slope, brightness_const = prepared_string
+		brightness = brightness_slope*total[semitone+fret-min_semitone] + brightness_const
+		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+
+		context.set_source_rgb(brightness, brightness, brightness)
+
 class SingleString(Fretboard):
 	""" Displays spectrum on one string, but also for overtones. """
 	def __init__(self,*args,**kwargs):
@@ -375,9 +467,9 @@ class SingleString(Fretboard):
 	def draw(self, widget, event):
 		Fretboard.draw(self, widget, event)
 
-		return True
+#		return True
 
-		if not hasattr(self,"brightness"): return True
+		if not self.spectrum: return True
 
 #		power = 1.26**self.magnitudes # from dB to power
 #		power = self.magnitudes
@@ -389,21 +481,42 @@ class SingleString(Fretboard):
 #		brightness = 1.-numpy.clip(brightness, 0.,1.)
 #		power = brightness
 
+		t = []
 		context = widget.window.cairo_create()
+
+		for fret in xrange(self.frets+1):
+
+#			darkness = 1. - self.brightness
+
+			# calculate total
+#			total=0
+#			for string in self.strings.values():
+#				semitone = string + fret
+##				total += integrate(self.semitones, darkness, semitone-0.5, semitone+0.5)
+#				t += integrate(self.frequencies, power, self.tune+fret, i)
+#				f = semitone_to_frequency(semitone)
+#				total += integrate(self.spectrum.frequency, self.spectrum.get_power(), f/1.0293022366434921, f*1.0293022366434921)
+
+#			t.append(total)
+			semitone = self.tune + fret
+			total = self.spectrum.get_total_power_in_semitone_range(semitone-0.5,semitone+0.5,self.overtones)
+			t.append(total)
+
+		min_power=0
+		max_power=max(t)
+		brightness_slope = - 1.0 / (max_power - min_power)
+		brightness_const = 1.0 * max_power/ (max_power - min_power)
+#		print t
+#		print min_power, max_power
 
 		for fret in xrange(self.frets+1):
 			context.rectangle(self.paddingx+fret*self.rectwidth, self.sumy, self.rectwidth, self.rectheight)
 
-			darkness = 1. - self.brightness
-
-			# calculate total
-			total=0
-			for string in self.strings.values():
-				semitone = string + fret
-				total += integrate(self.semitones, darkness, semitone-0.5, semitone+0.5)
-#				t += integrate(self.frequencies, power, self.tune+fret, i)
-			print total
+			total = t[fret]
+			brightness = brightness_slope*total + brightness_const
+			brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 			# convert to dB
+			context.rectangle(self.paddingx+fret*self.rectwidth, self.sumy, self.rectwidth, self.rectheight)
 #			dB = 4.3269116591383208 * numpy.log(t)
 #			print fret,t,dB
 
@@ -425,10 +538,10 @@ class SingleString(Fretboard):
 #			brightness = brightness_slope * t + brightness_const
 #			brightness = max(0.,min(1.,brightness))
 
-			avg = total / (self.overtones+1.)
+#			avg = total / (self.overtones+1.)
 
-			brightness = 1.-avg
-			brightness = max(0.,min(1.,brightness))
+#			brightness = 1.-avg
+#			brightness = max(0.,min(1.,brightness))
 			
 			context.set_source_rgb(brightness, brightness, brightness)
 			context.fill_preserve()

@@ -5,7 +5,7 @@ gobject.threads_init()
 
 import sys
 
-import Project, Visualizer, Analyze, Timeline
+import Project, Visualizer, Analyze, Timeline, Pipeline
 import numpy
 
 class Transcribe:
@@ -13,13 +13,23 @@ class Transcribe:
 		self.visualizers = []
 		self.autoupdate = False
 		self.project = None
-		self.mode_change_handler = None
 
 		# create gui
 		self.builder = gtk.Builder()
 		self.builder.add_from_file("gui.glade")
-		self.builder.get_object("rate").set_value(100)
+		self.builder.get_object("rate").set_value(1.0)
+		self.builder.get_object("cutoff_button").set_active(False)
+		self.builder.get_object("cutoff").set_value(1.0)
+		self.builder.get_object("cutoff").set_sensitive(False)
+		self.builder.get_object("delta_t").set_value(0.05)
+		self.builder.get_object("decay").set_value(0.2)
+		self.builder.get_object("beat_separation").set_value(0.01)
 		self.builder.connect_signals(self)
+
+		agr = gtk.AccelGroup()
+		self.builder.get_object("mainwindow").add_accel_group(agr)
+		key, mod = gtk.accelerator_parse("<Control>t")
+		self.builder.get_object("tap").add_accelerator("clicked", agr, key, mod, gtk.ACCEL_VISIBLE)
 
 		# create menu items for SingleString visualizers
 		singlestring = self.builder.get_object("singlestring")
@@ -38,7 +48,7 @@ class Transcribe:
 
 		# open project
 		if len(sys.argv)>1:
-			project = Project.load(self, sys.argv[1])
+			project = Project.load(sys.argv[1])
 			self.set_project(project)
 
 	def run(self):
@@ -49,7 +59,8 @@ class Transcribe:
 		if self.project: return False
 
 		project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
-		self.mode_change_handler = project.timeline.connect("notify::mode", self.mode_changed)
+		project.timeline.connect("notify::mode", self.mode_changed)
+		project.timeline.props.mode = Project.Timeline.MODE_DEFAULT
 		self.builder.get_object("position").set_adjustment(project.timeline.ruler.marker_start)
 		self.builder.get_object("duration").set_adjustment(project.timeline.ruler.marker_duration)
 		self.builder.get_object("timelinecontainer").add(project.timeline)
@@ -69,7 +80,7 @@ class Transcribe:
 
 		if not audiofile: return
 
-		project = Project.Project(self, audiofile)
+		project = Project.Project(audiofile)
 		self.set_project(project)
 
 	def open_project(self,widget):
@@ -91,7 +102,7 @@ class Transcribe:
 
 		if not filename: return
 
-		project = Project.load(self, filename)
+		project = Project.load(filename)
 		self.set_project(project)
 
 	def save_project_as(self,*args):
@@ -152,14 +163,18 @@ class Transcribe:
 			return False
 
 	def quit(self, *args):
-		if not self.close_project(): return False
+		if not self.close_project(): return True
 
 		gtk.main_quit()
 
-	# glade callbacks - analyze menu
+	# glade callbacks - windows menu
 	def open_fretboard(self,widget):
 		fretboard = Visualizer.Fretboard()
 		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
+
+	def open_total(self,widget):
+		fretboard = Visualizer.TotalFretboard()
+		Visualizer.VisualizerWindow(self.visualizers, "TotalFretboard", fretboard)
 
 	def open_singlestring(self,widget,string,semitone):
 		singlestring = Visualizer.SingleString(tune=semitone)
@@ -174,7 +189,6 @@ class Transcribe:
 		start,duration = marker
 
 		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
-		print sum(power)
 
 		w = Analyze.Analyze()
 		w.show_all()
@@ -185,6 +199,7 @@ class Transcribe:
 
 	# glade callbacks - toolbar
 	def set_default_mode(self,widget):
+		if not self.project: return
 		if not widget.get_active(): return
 
 		# set mode without triggering notify event because radiobutton is up to date
@@ -203,6 +218,47 @@ class Transcribe:
 
 		# set mode without triggering notify event because radiobutton is up to date
 		self.project.timeline.mode=Project.Timeline.MODE_DELETE
+
+	def insert_tab_marker(self,widget):
+		if not self.project: return
+
+		playback_marker = self.project.timeline.ruler.get_playback_marker()
+		if not playback_marker: return
+
+		start,duration = playback_marker
+
+		dialog = gtk.Dialog(title="Fret", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+
+		combobox = gtk.combo_box_new_text()
+		for i in xrange(len(self.project.timeline.tabulature.strings)):
+			string = self.project.timeline.tabulature.strings[i]
+			combobox.append_text(str(i+1)+" ("+str(string.tuning)+")")
+		combobox.set_active(0)
+
+		dialog.vbox.add(combobox)
+		entry = gtk.Entry()
+		dialog.vbox.add(entry)
+		dialog.show_all()
+		if dialog.run()==gtk.RESPONSE_ACCEPT:
+			try:
+				string = self.project.timeline.tabulature.strings[combobox.get_active()]
+				fret=int(entry.get_text())
+			except:
+				return
+			finally:
+				dialog.destroy()
+		else:
+			dialog.destroy()
+			return
+
+		marker = Project.Timeline.TabMarker(
+			string,
+			start,
+			duration,
+			fret
+		)
+		string.markers.append(marker)
+		self.project.touch()
 
 	def insert_marker(self,widget):
 		if not self.project: return
@@ -232,13 +288,27 @@ class Transcribe:
 		self.project.timeline.markers.append(marker)
 		self.project.touch()
 
+	def tap(self,widget):
+		if not self.project: return
+
+		self.project.timeline.rhythm.add_tap()
+
+	def clear_taps(self,widget):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+
+		start, duration = marker
+		self.project.timeline.rhythm.clear_taps(start,duration)
+
 	def pause(self, widget):
 		if not self.project: return
 
 		if widget.get_active():
 			self.project.pipeline.pause()
 		else:
-			rate = self.builder.get_object("rate").get_value()/100.
+			rate = self.builder.get_object("rate").get_value()
 			self.project.pipeline.play()
 
 	def play(self, *args):
@@ -248,7 +318,7 @@ class Transcribe:
 		if not marker: return
 
 		start, duration = marker
-		rate = self.builder.get_object("rate").get_value()/100.
+		rate = self.builder.get_object("rate").get_value()
 
 		self.project.pipeline.play(rate,start=start,stop=start+duration)
 
@@ -275,7 +345,13 @@ class Transcribe:
 		start,duration = marker
 
 		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
-		spectrum = Visualizer.SpectrumData(frq, power=power)
+
+		if self.builder.get_object("cutoff_button").get_active():
+			max_magnitude = self.builder.get_object("cutoff").get_value()
+		else:
+			max_magnitude = None
+
+		spectrum = Visualizer.SpectrumData(frq, power=power, max_magnitude=max_magnitude)
 
 		for viswindow in self.visualizers:
 			viswindow.visualizer.set_spectrum(spectrum)
@@ -306,6 +382,167 @@ class Transcribe:
 		self.project.timeline.ruler.set_playback_marker(start, duration)
 		self.update_playback_marker_spinbuttons()
 
+	def top_align(self,*args):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+		
+		start,duration = marker
+
+		taps = []
+		for tap in self.project.timeline.rhythm.taps:
+			time = tap.get_time()
+			if start<time and time<start+duration:
+				taps.append(time)
+
+		try: first = min(taps)
+		except ValueError: return
+
+		self.project.timeline.ruler.set_playback_marker(first, start+duration-first)
+
+	def bottom_align(self,*args):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+		
+		start,duration = marker
+
+		taps = []
+		for tap in self.project.timeline.rhythm.taps:
+			time = tap.get_time()
+			if start<time and time<start+duration:
+				taps.append(time)
+
+		try: last = max(taps)
+		except ValueError: return
+
+		self.project.timeline.ruler.set_playback_marker(start, last-start)
+
+	def divide(self,*args):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+		
+		start,duration = marker
+		self.project.timeline.ruler.set_playback_marker(start, 0.5*duration)
+		
+	def double(self,*args):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+		
+		start,duration = marker
+		self.project.timeline.ruler.set_playback_marker(start, 2.0*duration)
+
+	def find_beats(self,*args):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+		
+		start,duration = marker
+		power = numpy.array(self.project.appsinkpipeline.get_data(start,start+duration)) ** 2.0
+		rate = self.project.appsinkpipeline.caps[0]["rate"]
+
+		delta_t = self.builder.get_object("delta_t").get_value()
+		decay = self.builder.get_object("decay").get_value()
+		separation = self.builder.get_object("beat_separation").get_value()
+#		delta_t = 0.01
+#		decay = 0.5 # time needed to get to 1/e
+		# k*decay = 1
+		# power(t) = exp(-1)*power(t-decay)
+		# power(t) = exp(-k*decay)*power(t-decay)
+		# power(t) = exp(-k*delta_t)*power(t-delta_t)
+		decay_per_chunk = numpy.exp(-delta_t/decay)
+		samples = int(rate*delta_t)
+
+		limit = numpy.average(power[0:samples])
+
+		for i in xrange(1,int(len(power)/samples)):
+			limit *= decay_per_chunk
+			avg_power = numpy.average(power[samples*i : samples*(i+1)])
+
+			if avg_power>=limit*(1+separation):
+				time = delta_t*i
+				t=self.project.timeline.rhythm.add_tap(start+time, round((avg_power-limit)/separation,2))
+				t.props.x += 30
+			if avg_power>=limit:
+				limit=avg_power
+
+	def test(self,widget):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+		
+		start,duration = marker
+		power = numpy.array(self.project.appsinkpipeline.get_data(start,start+duration)) ** 2.0
+		rate = self.project.appsinkpipeline.caps[0]["rate"]
+
+		delta_t = self.builder.get_object("delta_t").get_value()
+		decay = self.builder.get_object("decay").get_value()
+		separation = self.builder.get_object("beat_separation").get_value()
+#		delta_t = 0.01
+#		decay = 0.5 # time needed to get to 1/e
+		# k*decay = 1
+		# power(t) = exp(-1)*power(t-decay)
+		# power(t) = exp(-k*decay)*power(t-decay)
+		# power(t) = exp(-k*delta_t)*power(t-delta_t)
+		decay_per_chunk = numpy.exp(-delta_t/decay)
+		samples = int(rate*delta_t)
+
+		limit = numpy.average(power[0:samples])
+		t = []
+		level = []
+		lim = []
+		tp1 = []
+
+		w = Analyze.Analyze()
+
+		for i in xrange(1,int(len(power)/samples)):
+			limit *= decay_per_chunk
+			chunk = power[samples*i : samples*(i+1)]
+			avg_power = numpy.average(chunk)
+			power_spectrum = Pipeline.windowed_fft(chunk)
+			bands = len(power_spectrum)
+			frqs = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
+			time = delta_t*i+start
+			min_frq_idx = numpy.min(numpy.nonzero(frqs>80.))
+			max_frq_idx = numpy.max(numpy.nonzero(frqs<1000.))
+			min_frq = frqs[min_frq_idx]
+			max_frq = frqs[max_frq_idx]
+			print frqs[0], min_frq, max_frq, frqs[-1]
+			total_power1 = numpy.trapz(power_spectrum[min_frq_idx:max_frq_idx], frqs[min_frq_idx:max_frq_idx])
+			tp1.append(total_power1)
+
+#			if avg_power>=limit*(1.0+separation):
+#			if avg_power>=limit+separation:
+#				w.add_line(time, color="g")
+			if avg_power>=limit:
+				limit=avg_power
+
+			t.append(time)
+			level.append(avg_power)
+			lim.append(limit)
+
+		w.show_all()
+		w.simple_plot(numpy.array(t), numpy.array(level), color="r")
+		w.simple_plot(numpy.array(t), numpy.array(tp1), color="b")
+		w.simple_plot(numpy.array(t), numpy.array(lim), color="g")
+
+		# markers
+		for tap in self.project.timeline.rhythm.taps:
+			time = tap.get_time()
+			if not start<time and time<start+duration: continue
+
+			if type(tap.weight)==float: pass
+			else:
+				w.add_line(time, color="r")
+
 	# glade callbacks - radioboxes
 	def playback_marker_radioboxes_changed(self,widget):
 		if not self.project: return
@@ -313,6 +550,9 @@ class Transcribe:
 		start = self.builder.get_object("position").get_value()
 		duration = self.builder.get_object("duration").get_value()
 		self.project.timeline.ruler.set_playback_marker(start,duration)
+
+	def cutoff_toggle(self,widget):
+		self.builder.get_object("cutoff").set_sensitive(widget.get_active())
 
 	# update spinbuttons when playback marker is moved
 	def update_playback_marker_spinbuttons(self,*args):
@@ -324,14 +564,12 @@ class Transcribe:
 
 	# update radiobuttons when mode is changed by timeline
 	def mode_changed(self,timeline,pspec):
-		if not self.project: return
-
 		if timeline.props.mode==Timeline.MODE_DEFAULT:
-			self.project.transcribe.builder.get_object("mode_default").set_active(True)
+			self.builder.get_object("mode_default").set_active(True)
 		elif timeline.props.mode==Timeline.MODE_ANNOTATE:
-			self.project.transcribe.builder.get_object("mode_annotate").set_active(True)
+			self.builder.get_object("mode_annotate").set_active(True)
 		elif timeline.props.mode==Timeline.MODE_DELETE:
-			self.project.transcribe.builder.get_object("mode_delete").set_active(True)
+			self.builder.get_object("mode_delete").set_active(True)
 
 	# spectrumlistener callback
 	def on_magnitudes(self, spectrumlistener, bands, rate, threshold, magnitudes):
@@ -342,7 +580,12 @@ class Transcribe:
 		frequencies = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
 		magnitudes = numpy.array(magnitudes)
 
-		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes, min_magnitude=threshold)
+		if self.builder.get_object("cutoff_button").get_active():
+			max_magnitude = self.builder.get_object("cutoff").get_value()
+		else:
+			max_magnitude = None
+				
+		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes, min_magnitude=threshold, max_magnitude=max_magnitude)
 
 		for viswindow in self.visualizers:
 			viswindow.visualizer.set_spectrum(spectrum)

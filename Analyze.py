@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import gtk, numpy, scipy
+import gtk, numpy, scipy.ndimage
 
 import matplotlib
 import matplotlib.backends.backend_gtkcairo as mpl_backend
@@ -46,8 +46,14 @@ class Analyze(gtk.Window):
 		vbox.pack_start(self.figure)
 		vbox.pack_start(self.navbar, False, False)
 
+	def simple_plot(self, x, y, **kwargs):
+		self.ax.plot(x, y, **kwargs)
+
+	def add_line(self, pos, **kwargs):
+		self.ax.axvline(pos, **kwargs)
+
 	def plot_spectrum(self, frq, power):
-		self.ax.plot(frq, power, color="g")
+		self.simple_plot(frq, power, color="g")
 #		self.ax.plot(frq, 10*numpy.log10(power), color="r")
 
 		for semitone in xrange(-29,50):

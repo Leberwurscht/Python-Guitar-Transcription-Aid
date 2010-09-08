@@ -130,8 +130,6 @@ class Marker(TimelineItem):
 
 	def clicked(self):
 		self.timeline.ruler.set_playback_marker(self.get_start(), self.get_duration())
-#		self.timeline.project.transcribe.update_playback_marker_spinbuttons()
-#		self.timeline.ruler.playback_marker_changed_cb()
 
 class Annotation(TimelineItem):
 	def __init__(self,timeline,text,**kwargs):
@@ -145,13 +143,165 @@ class Annotation(TimelineItem):
 	def delete_item(self):
 		self.timeline.annotations.remove(self)
 
+class TabMarker(goocanvas.Group):
+	def __init__(self,string,start,duration,fret,**kwargs):
+		kwargs["parent"] = string
+		goocanvas.Group.__init__(self,**kwargs)
+
+		self.fret = fret
+		self.string = string
+
+		width = 4
+		height = self.string.tabulature.timeline.get_pts(duration)
+		self.rect = goocanvas.Rect(parent=self,width=width,height=height,fill_color_rgba=0xaa0000aa)
+		self.text = goocanvas.Text(parent=self,text=str(fret), x=width*1.3)
+
+		self.props.y = self.string.tabulature.timeline.get_pts(start)
+
+		self.connect("button_release_event", self.clicked)
+
+	def get_start(self):
+		return self.string.tabulature.timeline.get_seconds(self.props.y)
+
+	def get_duration(self):
+		return self.string.tabulature.timeline.get_seconds(self.rect.props.height)
+
+	def clicked(self,*args):
+		timeline = self.string.tabulature.timeline
+
+		if timeline.props.mode==MODE_DEFAULT:
+			timeline.ruler.set_playback_marker(self.get_start(), self.get_duration())
+			return True
+		elif timeline.props.mode==MODE_DELETE:
+			self.string.markers.remove(self)
+			self.remove()
+			timeline.props.mode=MODE_DEFAULT
+			return True
+
+		return False
+
+class String(goocanvas.Group):
+	def __init__(self,tabulature,tuning,**kwargs):
+		kwargs["parent"] = tabulature
+		goocanvas.Group.__init__(self,**kwargs)
+
+		self.tuning = tuning
+		self.tabulature = tabulature
+
+		height = tabulature.timeline.get_pts(tabulature.timeline.project.pipeline.duration)
+		goocanvas.polyline_new_line(self, 2,0, 2,height)
+
+		self.markers = []
+
 class Tabulature(goocanvas.Group):
-	pass
+	def __init__(self,timeline,strings,**kwargs):
+		kwargs["parent"] = timeline.get_root_item()
+
+		if "spacing" in kwargs:
+			self.spacing = kwargs["spacing"]
+			del kwargs["spacing"]
+		else:
+			self.spacing = 30
+
+		goocanvas.Group.__init__(self,**kwargs)
+
+		self.timeline = timeline
+	
+		self.strings = []
+		for i in xrange(len(strings)):
+			tuning = strings[i]
+			string = String(self, tuning)
+			string.props.x = i*self.spacing
+			self.strings.append(string)
+
+	def get_width(self):
+		return len(self.strings)*self.spacing
+
+class Tap(goocanvas.Group):
+	def __init__(self,rhythm,weight=1,**kwargs):
+		kwargs["parent"] = rhythm
+
+		if "time" in kwargs:
+			kwargs["y"] = rhythm.timeline.get_pts(kwargs["time"])
+			del kwargs["time"]
+
+		goocanvas.Group.__init__(self,**kwargs)
+
+		self.rhythm = rhythm
+		self.line = goocanvas.polyline_new_line(self, 0, 0, 10, 0)
+		self.time_sum = self.get_time()*weight
+		self.weight = weight
+		self.text = goocanvas.Text(parent=self, text=str(self.weight), x=10, anchor=gtk.ANCHOR_W)
+
+	def append_tap(self,time):
+		self.weight += 1
+		self.time_sum += time
+		self.props.y = 1.0*self.rhythm.timeline.get_pts(self.time_sum)/self.weight
+		self.text.props.text = str(self.weight)
+
+	def get_time(self):
+		return self.rhythm.timeline.get_seconds(self.props.y)
+
+class Rhythm(goocanvas.Group):
+	def __init__(self, timeline, **kwargs):
+		kwargs["parent"] = timeline.get_root_item()
+
+		goocanvas.Group.__init__(self,**kwargs)
+
+		self.timeline = timeline
+		self.tolerance = 0.10
+
+		self.rect = goocanvas.Rect(parent=self, width=20, height=timeline.get_pts(timeline.project.pipeline.duration), fill_color="red")
+		self.taps = []
+
+	def add_tap(self, pos=None, weight=1):
+		if pos:
+			tap = Tap(self,weight,time=pos)
+			self.taps.append(tap)
+			self.timeline.project.touch()
+			return tap
+
+		pos = self.timeline.project.pipeline.get_position()
+
+		# find near taps
+		near = []
+		for tap in self.taps:
+			time = tap.get_time()
+			if abs(time-pos)<self.tolerance: near.append(tap)
+
+		l = len(near)
+		if l>1:
+			print "ambiguous tap"
+		elif l==1:
+			near[0].append_tap(pos)
+			self.timeline.project.touch()
+			return near[0]
+		else:
+			tap = Tap(self,time=pos)
+			self.taps.append(tap)
+			self.timeline.project.touch()
+			return tap
+
+	def clear_taps(self,start,duration):
+		remove = []
+
+		for tap in self.taps:
+			time = tap.get_time()
+			if start<time and time<start+duration:
+				remove.append(tap)
+
+		for tap in remove:
+			tap.remove()
+			self.taps.remove(tap)
+
+		self.timeline.project.touch()
+
+	def get_width(self):
+		return 20
 
 class Ruler(goocanvas.Group):
-	def __init__(self, timeline, project, **kwargs):
-		self.timeline = timeline
-		self.project = project
+	def __init__(self, timeline, **kwargs):
+		kwargs["parent"] = timeline.get_root_item()
 
 		if "width" in kwargs:
 			width = kwargs["width"]
@@ -161,13 +311,15 @@ class Ruler(goocanvas.Group):
 
 		goocanvas.Group.__init__(self,**kwargs)
 
-		self.rect = goocanvas.Rect(parent=self, width=width, height=timeline.get_pts(project.pipeline.duration), fill_color="blue")
+		self.timeline = timeline
+
+		self.rect = goocanvas.Rect(parent=self, width=width, height=timeline.get_pts(timeline.project.pipeline.duration), fill_color="blue")
 		self.rect.connect("button_press_event", self.button_press)
 		self.motion_handler_id = None
 		self.release_handler_id = None
 
 		# labelling
-		for i in xrange(int(project.pipeline.duration)):
+		for i in xrange(int(timeline.project.pipeline.duration)):
 			goocanvas.Text(parent=self, text=str(1.0*i), y=timeline.get_pts(i), pointer_events=0)
 
 		# playback marker
@@ -175,10 +327,13 @@ class Ruler(goocanvas.Group):
 		self.playback_marker.props.pointer_events = 0 # let self.rect receive pointer events
 
 		# playback marker adjustments
-		self.marker_start = gtk.Adjustment(0, 0, project.pipeline.duration, 0.01)
-		self.marker_duration = gtk.Adjustment(0, 0, project.pipeline.duration, 0.01)
+		self.marker_start = gtk.Adjustment(0, 0, timeline.project.pipeline.duration, 0.01)
+		self.marker_duration = gtk.Adjustment(0, 0, timeline.project.pipeline.duration, 0.01)
 		self.start_handler = self.marker_start.connect("value-changed", self.start_changed)
 		self.duration_handler = self.marker_duration.connect("value-changed", self.duration_changed)
+
+	def get_width(self):
+		return self.rect.props.width
 
 	def start_changed(self,adjustment):
 		self.playback_marker.props.y = self.timeline.get_pts(self.marker_start.get_value())
@@ -254,21 +409,17 @@ class Ruler(goocanvas.Group):
 	def get_playback_marker(self):
 		if not self.playback_marker.props.visibility==goocanvas.ITEM_VISIBLE: return None
 
-#		start,duration = self.timeline.get_seconds(self.playback_marker.props.y, self.playback_marker.props.height)
-
 		return self.marker_start.get_value(), self.marker_duration.get_value()
 
 	def set_playback_marker(self,start,duration):
 		self.marker_start.set_value(start)
 		self.marker_duration.set_value(duration)
 		self.playback_marker.props.visibility = goocanvas.ITEM_VISIBLE
-#		self.playback_marker.props.y = self.timeline.get_pts(start)
-#		self.playback_marker.props.height = self.timeline.get_pts(duration)
 
 class Timeline(goocanvas.Canvas):
 	__gproperties__ = {"mode":(gobject.TYPE_INT, "mode", "editing mode", 0, MODES_NUM-1, MODE_DEFAULT, gobject.PARAM_READWRITE)}
 
-	def __init__(self, project, **kwargs):
+	def __init__(self, project, strings, **kwargs):
 		goocanvas.Canvas.__gobject_init__(self)
 
 		self.project = project
@@ -277,7 +428,7 @@ class Timeline(goocanvas.Canvas):
 		else: self.scale = 100
 
 		if "width" in kwargs: self.width = kwargs["width"]
-		else: self.width = 450
+		else: self.width = 500
 
 		# mode
 		self.mode = MODE_DEFAULT
@@ -291,11 +442,11 @@ class Timeline(goocanvas.Canvas):
 		root = self.get_root_item()
 
 		# add ruler
-		self.ruler = Ruler(self, self.project, parent=root)
+		self.ruler = Ruler(self)
 
-		# setup space
-		self.space = goocanvas.Group(parent=root)
-		self.space.translate(self.ruler.rect.props.width*1.3, 0)
+		# add rhythm marker space
+		self.rhythm = Rhythm(self)
+		self.rhythm.props.x = self.ruler.get_width()
 
 		# position marker
 		self.posmarker = goocanvas.polyline_new_line(root, 0, 0, self.width, 0)
@@ -303,6 +454,12 @@ class Timeline(goocanvas.Canvas):
 		# items
 		self.annotations = []
 		self.markers = []
+		self.tabulature = Tabulature(self, strings)
+		self.tabulature.props.x = self.rhythm.props.x + self.rhythm.get_width() + 20
+
+		# setup space
+		self.space = goocanvas.Group(parent=root)
+		self.space.props.x = self.tabulature.props.x + self.tabulature.get_width()+20
 
 	# custom properties
 	def do_get_property(self,pspec):
