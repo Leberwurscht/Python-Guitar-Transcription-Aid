@@ -43,6 +43,17 @@ class Transcribe:
 		singlestring.set_submenu(singlestrings)
 		singlestrings.show_all()
 
+		singlestring = self.builder.get_object("singlestringarea")
+		singlestrings = gtk.Menu()
+
+		for string, semitone in Visualizer.standard_tuning.iteritems():
+			stringitem = gtk.MenuItem(str(string))
+			stringitem.connect("activate", self.open_singlestringarea, string, semitone)
+			singlestrings.append(stringitem)
+
+		singlestring.set_submenu(singlestrings)
+		singlestrings.show_all()
+
 		# update position marker
 		gobject.timeout_add(100, self.update_position_marker)
 
@@ -173,12 +184,18 @@ class Transcribe:
 		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
 
 	def open_total(self,widget):
-		fretboard = Visualizer.TotalFretboard()
+#		fretboard = Visualizer.TotalFretboard()
+		fretboard = Visualizer.Fretboard(method="cumulate")
 		Visualizer.VisualizerWindow(self.visualizers, "TotalFretboard", fretboard)
 
 	def open_singlestring(self,widget,string,semitone):
 		singlestring = Visualizer.SingleString(tune=semitone)
 		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
+
+	def open_singlestringarea(self,widget,string,semitone):
+		fretboard = Visualizer.SingleString(tune=semitone, method="cumulate")
+#		fretboard = Visualizer.SingleStringArea(tune=semitone)
+		Visualizer.VisualizerWindow(self.visualizers, "SingleStringArea %d (%d)" % (string, semitone), fretboard)
 
 	def open_plot(self, widget):
 		if not self.project: return

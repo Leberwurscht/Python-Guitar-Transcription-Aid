@@ -3,28 +3,11 @@
 import gtk, numpy, cairo
 import spectrumvisualizer
 import gst
+import scipy.interpolate
 
 REFERENCE_FREQUENCY = 440
 standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
 note_names = ["a","ais","b","c","cis","d","dis","e","f","fis","g","gis"]
-
-#class RhythmWindow(gtk.Window):
-#	def __init__(self,project,**kwargs):
-#		gtk.Window.__init__(self,**kwargs)
-#
-#		self.project = project
-#
-#		button = gtk.Button("Tap")
-#		button.connect("pressed", self.tap)
-#		button.connect("key-press-event", self.tap)
-#		button.set_size_request(100,60)
-#		self.add(button)
-#		self.show_all()
-#
-#	def tap(self,*args):
-#		if not self.project: return
-#
-#		self.project.timeline.rhythm.add_tap()
 
 class CompareWindow(gtk.Window):
 	def __init__(self, *args, **kwargs):
@@ -81,65 +64,6 @@ class CompareWindow(gtk.Window):
 	def release(self,semitone):
 		self.pipeline.set_state(gst.STATE_NULL)
 
-def integrate(x, y, lower_limit, upper_limit):
-#	center_frequency = REFERENCE_FREQUENCY * 1.0594630943592953**semitone
-#	center_frequency *= overtone+1
-
-	# range is one semitone, so one quartertone up and down
-#	lower_limit = center_frequency * 0.97153194115360586
-#	upper_limit = center_frequency * 1.0293022366434921
-
-	### interpolate power(lower_limit) and power(upper_limit)
-	lower_right_index = numpy.min(numpy.nonzero(x > lower_limit))
-	lower_left_index = lower_right_index-1
-
-	lower_left = x[lower_left_index]
-	lower_left_y = y[lower_left_index]
-
-	lower_right = x[lower_right_index]
-	lower_right_y = y[lower_right_index]
-
-	upper_right_index = numpy.min(numpy.nonzero(x > upper_limit))
-	upper_left_index = upper_right_index-1
-
-	upper_left = x[upper_left_index]
-	upper_left_y = y[upper_left_index]
-
-	upper_right = x[upper_right_index]
-	upper_right_y = y[upper_right_index]
-
-	lower_limit_interpolated = (lower_right-lower_limit)*lower_left_y + (lower_limit-lower_left)*lower_right_y
-	lower_limit_interpolated /= lower_right-lower_left
-
-	upper_limit_interpolated = (upper_right-upper_limit)*upper_left_y + (upper_limit-upper_left)*upper_right_y
-	upper_limit_interpolated /= upper_right-upper_left
-
-	# build frequency, power for (lower_limit, upper_limit) range
-#	newx = [lower_limit]
-#	newy = [lower_limit_interpolated]
-#
-#	for i in xrange(lower_right_index, upper_right_index):
-#		f.append(x[i])
-#		p.append(y[i])
-#
-#	newx.append(upper_limit)
-#	newy.append(upper_limit_interpolated)
-
-	int_x = numpy.zeros(upper_right_index-lower_right_index + 2)
-	int_y = numpy.zeros(upper_right_index-lower_right_index + 2)
-
-	int_x[0] = lower_limit
-	int_x[1:-1] = x[lower_right_index:upper_right_index]
-	int_x[-1] = upper_limit
-
-	int_y[0] = lower_limit_interpolated
-	int_y[1:-1] = y[lower_right_index:upper_right_index]
-	int_y[-1] = upper_limit_interpolated
-
-	r = numpy.trapz(int_y, int_x)
-
-	return r
-
 class VisualizerWindow(gtk.Window):
 	def __init__(self, vislist, title, visualizer):
 		gtk.Window.__init__(self)
@@ -181,6 +105,7 @@ class SpectrumData:
 		self.magnitude = None
 		self.brightness = None
 		self.semitone = None
+		self.power_spline = None
 
 		if "method" in kwargs:
 			self.method = kwargs["method"]
@@ -265,18 +190,50 @@ class SpectrumData:
 		total = 0
 
 		for i in xrange(overtones+1):
-			total += integrate(self.frequency, self.get_power(), lower*(i+1), upper*(i+1))
+#			total += integrate(self.frequency, self.get_power(), lower*(i+1), upper*(i+1))
+			total += self.get_power_in_frequency_range(lower*(i+1), upper*(i+1))
 
 		return total
 
-		# spectrum element calculation for comparison:
-#		magnitude = max(threshold, dB)
-#		dB = 10.0 * log10(power)
-#		power = fft_result**2 / nfft**2
-#		nfft = len(data) = 2*bands - 2,
-#		bands=len(fft_result)
-#		fft_result = fft(hamming(data))
-#		len(fft_result) = len(data)/2+1 => len(data)=2*bands-2
+	def get_points_in_semitone_range(self,lower,upper,overtones=10):
+		l = semitone_to_frequency(lower)
+		u = semitone_to_frequency(upper)
+		return self.get_points_in_frequency_range(l,u,overtones)
+
+	def get_points_in_frequency_range(self,lower,upper,overtones=10):
+		# string 6: consider range of 3 semitones for key and 1st overtone
+		# string 5: consider range of 3 semitones for key tone
+		## better: estimate peak width through window function and use range of one semitone
+		## or, if greater, peak width
+
+		# low-pitched tones have more overtones (up to 9) and have them most of the time
+		# key tone often lower-toned than first overtone for low-pitched notes
+
+		# high-pitched tones tend to have less, but can have up to 6
+
+		# calculate variance of peak center among overtones, should be small (inharmonicity)
+
+		# return total power, inharmonicity, and perhaps some "independence" coefficients that
+		# say how probable it is that this total power is just overtones of other notes or whether
+		# the power belongs to an overtone of this note.
+		# the second one can be seen by -X-X-X-X-X-X or --X--X--X--X patterns
+		# the first one can be seen by checking for alternative key tones explaining these peaks
+
+		points = 0
+		power = 0
+
+		power = self.get_total_power_in_frequency_range(lower,upper,overtones)
+
+		return points
+
+	def get_power_spline(self):
+		if not self.power_spline:
+			self.power_spline = scipy.interpolate.InterpolatedUnivariateSpline(self.frequency, self.get_power(), None, [None, None], 1)
+
+		return self.power_spline
+
+	def get_power_in_frequency_range(self,lower,upper):
+		return self.get_power_spline().integral(lower, upper)
 
 class Fretboard(gtk.DrawingArea):
 	def __init__(self,*args,**kwargs):
@@ -313,6 +270,24 @@ class Fretboard(gtk.DrawingArea):
 		if "capo" in kwargs: self.capo = kwargs["capo"]
 		else: self.capo = 0
 
+		if "method" in kwargs: self.method = kwargs["method"]
+		else: self.method = "gradient"
+
+		if self.method=="gradient":
+			self.prepare_fretboard = self.prepare_fretboard_gradient
+			self.prepare_string = self.prepare_string_gradient
+			self.set_fill_source = self.set_fill_source_gradient
+		elif self.method=="cumulate":
+			self.prepare_fretboard = self.prepare_fretboard_cumulate
+			self.prepare_string = self.prepare_string_cumulate
+			self.set_fill_source = self.set_fill_source_cumulate
+#		elif self.method=="points":
+#			self.prepare_fretboard = self.prepare_fretboard_points
+#			self.prepare_string = self.prepare_string_points
+#			self.set_fill_source = self.set_fill_source_points
+		else:
+			raise ValueError, "Invalid method"
+
 		markerspace = self.rectheight/2 + self.markers_radius
 
 		if len(self.markers)==0: markerspace=0
@@ -327,16 +302,14 @@ class Fretboard(gtk.DrawingArea):
 	def draw(self, widget, event):
 		context = widget.window.cairo_create()
 
-		# build pattern
-		prepared_fretboard = self.prepare_fretboard()
-#		matrix, pattern = self.prepare_patterns()
+		fretboard_data = self.prepare_fretboard()
 
 		for string,semitone in self.strings.iteritems():
-			prepared_string = self.prepare_string(semitone,prepared_fretboard)
+			string_data = self.prepare_string(semitone, fretboard_data)
 
 			for fret in xrange(self.frets+1):
 				context.rectangle(self.paddingx+fret*self.rectwidth, self.paddingy+self.rectheight*(string-1), self.rectwidth, self.rectheight)
-				self.set_fill_source(context,semitone,fret,prepared_fretboard,prepared_string)
+				self.set_fill_source(context, fret, string_data)
 				context.fill_preserve()
 
 				context.set_line_width(3)
@@ -365,11 +338,7 @@ class Fretboard(gtk.DrawingArea):
 		context.line_to(self.paddingx+self.rectwidth*.3,self.paddingy+self.rectheight*len(self.strings))
 		context.stroke()
 
-	def set_fill_source(self,context,semitone,fret,prepared_fretboard,prepared_string):
-		matrix, pattern = prepared_fretboard
-		context.set_source(pattern)
-
-	def prepare_fretboard(self):
+	def prepare_fretboard_gradient(self):
 		if self.spectrum:
 			semitones = self.spectrum.get_semitone()
 			brightness = self.spectrum.get_brightness()
@@ -391,18 +360,78 @@ class Fretboard(gtk.DrawingArea):
 
 		return matrix, pattern
 
-	def prepare_string(self, semitone, prepared_fretboard):
+	def prepare_string_gradient(self, semitone, prepared_fretboard):
 		matrix, pattern = prepared_fretboard
 		matrix_copy = cairo.Matrix() * matrix
 		matrix_copy.translate(semitone*self.rectwidth, 0)
 		pattern.set_matrix(matrix_copy)
 
-		return None
+		return pattern
+
+	def set_fill_source_gradient(self,context,fret,prepared_string):
+		pattern = prepared_string
+		context.set_source(pattern)
+
+	def prepare_fretboard_cumulate(self):
+		if not self.spectrum: return
+
+		min_power = 0
+		max_power = 0
+#		min_mag = -60
+#		max_mag = 0
+
+		strings = {}
+		for string,semitone in self.strings.iteritems():
+			strings[semitone] = []
+			max_on_string = 0
+			for fret in xrange(self.frets+1):
+				lower = semitone_to_frequency(semitone+fret-0.5)
+				upper = semitone_to_frequency(semitone+fret+0.5)
+				p = self.spectrum.get_power_in_frequency_range(lower, upper)
+				strings[semitone].append(p)
+#				m = power_to_magnitude(p)
+#				strings[semitone].append(m)
+
+				if p>max_on_string: max_on_string = p
+#				if m>max_on_string: max_on_string = m
+
+			if max_on_string > max_power: max_power = max_on_string
+#			if max_on_string > max_mag: max_mag = max_on_string
+
+		brightness_slope = - 1.0 / (max_power - min_power)
+		brightness_const = 1.0 * max_power / (max_power - min_power)
+#		brightness_slope = - 1.0 / (max_mag - min_mag)
+#		brightness_const = 1.0 * max_mag / (max_mag - min_mag)
+
+		return strings, brightness_slope, brightness_const
+
+	def prepare_string_cumulate(self, semitone, prepared_fretboard):
+		if not self.spectrum: return
+
+		strings, brightness_slope, brightness_const = prepared_fretboard
+
+		power = numpy.array(strings[semitone])
+		brightness = brightness_slope*power + brightness_const
+		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
+
+		return brightness
+
+	def set_fill_source_cumulate(self,context,fret,prepared_string):
+		if not self.spectrum:
+			context.set_source_rgb(1.0,1.0,1.0)
+			return
+
+		brightness = prepared_string
+		b = brightness[fret]
+		context.set_source_rgb(b,b,b)
 
 class TotalFretboard(Fretboard):
 	def __init__(self,*args,**kwargs):
 		if "overtones" in kwargs: self.overtones = kwargs["overtones"]
 		else: self.overtones = 10
+
+		if "calculation_overtones" in kwargs: self.calculation_overtones = kwargs["calculation_overtones"]
+		else: self.calculation_overtones = self.overtones
 
 		Fretboard.__init__(self,*args,**kwargs)
 
@@ -414,7 +443,7 @@ class TotalFretboard(Fretboard):
 		min_semitone = min(self.strings.values())
 
 		for semitone in xrange(min_semitone, max(self.strings.values())+self.frets+1):
-			total.append( self.spectrum.get_total_power_in_semitone_range(semitone-0.5,semitone+0.5,self.overtones) )
+			total.append( self.spectrum.get_total_power_in_semitone_range(semitone-0.5,semitone+0.5,self.calculation_overtones) )
 
 		return min_semitone, total
 
@@ -434,7 +463,9 @@ class TotalFretboard(Fretboard):
 		return brightness_slope, brightness_const
 
 	def set_fill_source(self,context,semitone,fret,prepared_fretboard,prepared_string):
-		if not self.spectrum: return
+		if not self.spectrum:
+			context.set_source_rgb(1.0,1.0,1.0)
+			return
 			
 		min_semitone, total = prepared_fretboard
 		brightness_slope, brightness_const = prepared_string
@@ -442,6 +473,32 @@ class TotalFretboard(Fretboard):
 		brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 
 		context.set_source_rgb(brightness, brightness, brightness)
+
+class SingleStringArea(TotalFretboard):
+	""" Displays spectrum on one string, but also for overtones. """
+	def __init__(self,*args,**kwargs):
+		if "tune" in kwargs: self.tune = kwargs["tune"]
+		else: self.tune = -5
+
+		if "overtones" in kwargs: self.overtones = kwargs["overtones"]
+		else: self.overtones = 10
+
+		self.calculation_overtones = 0
+
+		if not "rectheight" in kwargs: kwargs["rectheight"] = 10
+
+		kwargs["strings"] = {}
+		for i in xrange(1,self.overtones+2):
+			kwargs["strings"][i] = self.tune + 12.*numpy.log2(i)
+
+		TotalFretboard.__init__(self,*args,**kwargs)
+
+		markerspace = self.rectheight/2 + self.markers_radius
+		self.sumy = len(self.strings)*self.rectheight + markerspace + 2*self.paddingy
+		self.set_size_request((self.frets+1)*self.rectwidth + 2*self.paddingx, self.sumy + self.rectheight + self.paddingy)
+
+	def draw(self, widget, event):
+		Fretboard.draw(self, widget, event)
 
 class SingleString(Fretboard):
 	""" Displays spectrum on one string, but also for overtones. """
@@ -457,6 +514,10 @@ class SingleString(Fretboard):
 		kwargs["strings"] = {}
 		for i in xrange(1,self.overtones+2):
 			kwargs["strings"][i] = self.tune + 12.*numpy.log2(i)
+
+		if "method" in kwargs:
+			if not kwargs["method"] in ["gradient","cumulate"]:
+				raise ValueError, "Invalid method"
 
 		Fretboard.__init__(self,*args,**kwargs)
 

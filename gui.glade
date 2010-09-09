@@ -164,6 +164,13 @@
                       </object>
                     </child>
                     <child>
+                      <object class="GtkMenuItem" id="singlestringarea">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">SingleStringArea</property>
+                        <property name="use_underline">True</property>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkMenuItem" id="plot">
                         <property name="visible">True</property>
                         <property name="label" translatable="yes">Plot</property>
