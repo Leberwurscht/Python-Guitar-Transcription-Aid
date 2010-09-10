@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import gtk, gobject
+import gtk, gobject, goocanvas
 gobject.threads_init()
 
 import sys
@@ -64,6 +64,7 @@ class Transcribe:
 
 	def run(self):
 		self.builder.get_object("mainwindow").show_all()
+
 		gtk.main()
 
 	def set_project(self, project):
@@ -212,7 +213,20 @@ class Transcribe:
 		w.plot_spectrum(frq, power)
 
 	def compare(self,widget):
-		w = Visualizer.CompareWindow()
+
+		c = goocanvas.Canvas()
+		c.set_property("has-tooltip",True)
+		f = Visualizer.Fretboard2(parent=c.get_root_item())
+		width = f.get_width()
+		height = f.get_height()
+		c.set_bounds(0,0,width,height)
+		c.set_size_request(width,height)
+		w = gtk.Window()
+		w.set_title("Compare")
+		w.add(c)
+		w.show_all()
+
+#		w = Visualizer.CompareWindow()
 
 	# glade callbacks - toolbar
 	def set_default_mode(self,widget):

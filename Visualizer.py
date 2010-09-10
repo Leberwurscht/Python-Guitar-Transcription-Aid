@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import gtk, numpy, cairo
+import gtk, numpy, cairo, goocanvas
 import spectrumvisualizer
 import gst
 import scipy.interpolate
@@ -8,6 +8,9 @@ import scipy.interpolate
 REFERENCE_FREQUENCY = 440
 standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
 note_names = ["a","ais","b","c","cis","d","dis","e","f","fis","g","gis"]
+
+def note_name(semitone):
+	return note_names[int(round(semitone + 1000*12)) % 12]
 
 class CompareWindow(gtk.Window):
 	def __init__(self, *args, **kwargs):
@@ -97,6 +100,93 @@ def semitone_to_frequency(semitone):
 	frequency = REFERENCE_FREQUENCY * (2.**(1./12.))**semitone
 	return frequency
 
+class FretOnStringTest(goocanvas.ItemSimple, goocanvas.Item):
+	def __init__(self, x, y, width, height, **kwargs):
+		goocanvas.ItemSimple.__init__(**kwargs)
+		self.x = x
+		self.y = y
+		self.width = width
+		self.height = height
+
+	def do_simple_create_path(self, cr):
+		cr.rectangle(self.x, self.y, self.width, self.height)
+		cr.move_to(self.x, self.y)
+		cr.line_to(self.x + self.width, self.y + self.height)
+		cr.move_to(self.x + self.width, self.y)
+		cr.line_to(self.x, self.y + self.height)
+
+	def do_button_press_event(self, target, event):
+		print "button press!"
+
+class Semitone(goocanvas.Rect):
+	def __init__(self,semitone,volume,**kwargs):
+		if not "width" in kwargs: kwargs["width"]=30
+		if not "height" in kwargs: kwargs["height"]=20
+		kwargs["tooltip"] = note_name(semitone)+" ("+str(semitone)+") ["+str(semitone_to_frequency(semitone))+" Hz]"
+		kwargs["fill_color_rgba"] = 0x0000ffff
+
+		goocanvas.Rect.__init__(self,**kwargs)
+
+		self.semitone = semitone
+		self.connect("button_press_event", self.press)
+		self.connect("button_release_event", self.release)
+
+		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
+		self.volume = volume
+
+	def press(self,item,target,event):
+		if event.button==1:
+			self.pipeline.get_by_name("volume").set_property("volume", self.volume.get_value())
+			self.pipeline.get_by_name("src").set_property("freq", semitone_to_frequency(self.semitone))
+			self.pipeline.set_state(gst.STATE_PLAYING)
+		elif event.button==3:
+			menu = gtk.Menu()
+			item = gtk.MenuItem("test")
+#			item.connect("activate", self.)
+			menu.append(item)
+			item.show_all()
+			menu.popup(None, None, None, event.button, event.time)
+
+	def release(self,item,target,event):
+		self.pipeline.set_state(gst.STATE_NULL)
+
+class Fretboard2(goocanvas.Table):
+	def __init__(self, frets=12, strings=None, **kwargs):
+		goocanvas.Table.__init__(self,**kwargs)
+
+		if "width" in kwargs:
+			self.width = kwargs["width"]
+			del kwargs["width"]
+		else:
+			self.width = 30
+
+		if "height" in kwargs:
+			self.height = kwargs["height"]
+			del kwargs["height"]
+		else:
+			self.height = 20
+
+		if not strings:
+			strings = [-5,-10,-14,-19,-24,-29]
+
+		self.volume = gtk.Adjustment(0.04,0.0,10.0,0.01)
+
+		for i in xrange(len(strings)):
+			semitone = strings[i]
+
+			for fret in xrange(frets+1):
+				rect = Semitone(semitone+fret, self.volume, parent=self)
+				self.set_child_properties(rect, row=i, column=fret)
+
+		self.strings = strings
+		self.frets = frets
+
+	def get_width(self):
+		return self.get_bounds().x2 - self.get_bounds().x1
+
+	def get_height(self):
+		return self.get_bounds().y2 - self.get_bounds().y1
+
 class SpectrumData:
 	""" holds data for visualizers, calculates and caches different scales """
 	def __init__(self, frequency, **kwargs):
@@ -106,6 +196,7 @@ class SpectrumData:
 		self.brightness = None
 		self.semitone = None
 		self.power_spline = None
+		self.powerfreq_spline = None
 
 		if "method" in kwargs:
 			self.method = kwargs["method"]
@@ -200,6 +291,52 @@ class SpectrumData:
 		u = semitone_to_frequency(upper)
 		return self.get_points_in_frequency_range(l,u,overtones)
 
+	def analyze_semitone(self,semitone,overtones=10):
+		bands = len(self.frequency)
+		rate = 2.0 * bands * self.frequency[-1] / ( bands-0.5 )
+		data_length = 2*bands - 2
+
+		# http://mathworld.wolfram.com/HammingFunction.html: position of first root of apodization function
+		peak_radius = 1.299038105676658 * rate / data_length
+
+		frequency = semitone_to_frequency(semitone)
+
+		total_power = 0
+		diff_squares = 0
+		diffs = 0
+
+		for i in xrange(1,overtones+2):
+			f = frequency*i
+			osemitone = frequency_to_semitone(f)
+			lower_frequency = f - peak_radius*1.65
+			upper_frequency = f + peak_radius*1.65
+
+			lower_frequency = min(lower_frequency, semitone_to_frequency(osemitone-0.5))
+			upper_frequency = max(upper_frequency, semitone_to_frequency(osemitone+0.5))
+
+			power = self.get_power_in_frequency_range(lower_frequency,upper_frequency)
+			peak_center = self.get_powerfreq_spline().integral(lower_frequency,upper_frequency) / power
+
+			difference_in_semitones = frequency_to_semitone(peak_center) - osemitone
+
+			total_power += power
+			diff_squares += power * difference_in_semitones**2.
+			diffs += power * difference_in_semitones
+
+		center = diffs/total_power
+		variance = diff_squares/total_power - center**2.
+		standard_deviation = numpy.sqrt(variance)
+
+		if standard_deviation<0.1:
+#			print semitone, standard_deviation, center
+			if abs(center)>0.5: print "oops",semitone, standard_deviation, center
+
+	def get_powerfreq_spline(self):
+		if not self.powerfreq_spline:
+			self.powerfreq_spline = scipy.interpolate.InterpolatedUnivariateSpline(self.frequency, self.get_power()*self.frequency, None, [None, None], 1)
+
+		return self.powerfreq_spline
+
 	def get_points_in_frequency_range(self,lower,upper,overtones=10):
 		# string 6: consider range of 3 semitones for key and 1st overtone
 		# string 5: consider range of 3 semitones for key tone
@@ -218,6 +355,8 @@ class SpectrumData:
 		# the power belongs to an overtone of this note.
 		# the second one can be seen by -X-X-X-X-X-X or --X--X--X--X patterns
 		# the first one can be seen by checking for alternative key tones explaining these peaks
+
+		# problem: if only one overtone exists, inharmonity is 0 but this is not necessarily a note
 
 		points = 0
 		power = 0
@@ -387,6 +526,7 @@ class Fretboard(gtk.DrawingArea):
 			for fret in xrange(self.frets+1):
 				lower = semitone_to_frequency(semitone+fret-0.5)
 				upper = semitone_to_frequency(semitone+fret+0.5)
+				self.spectrum.analyze_semitone(semitone+fret)
 				p = self.spectrum.get_power_in_frequency_range(lower, upper)
 				strings[semitone].append(p)
 #				m = power_to_magnitude(p)
