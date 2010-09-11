@@ -401,7 +401,6 @@ class Transcribe:
 
 		for viswindow in self.visualizers:
 			viswindow.visualizer.set_spectrum(spectrum)
-			viswindow.visualizer.queue_draw()
 
 	def playback_marker_previous(self, *args):
 		if not self.project: return
@@ -635,7 +634,6 @@ class Transcribe:
 
 		for viswindow in self.visualizers:
 			viswindow.visualizer.set_spectrum(spectrum)
-			viswindow.visualizer.queue_draw()
 
 	# position marker callback
 	def update_position_marker(self,*args):
