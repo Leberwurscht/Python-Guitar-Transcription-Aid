@@ -100,6 +100,7 @@ def semitone_to_frequency(semitone):
 	frequency = REFERENCE_FREQUENCY * (2.**(1./12.))**semitone
 	return frequency
 
+# problem: if x or y is updated, self.matrix needs to be updated
 class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 	__gproperties__ = {
 		'x': (gobject.TYPE_DOUBLE,'X','x coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
@@ -108,7 +109,7 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 		'height': (gobject.TYPE_DOUBLE,'Height','Height',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,20,gobject.PARAM_READWRITE)
 	}
 
-	def __init__(self, semitone, volume, spectrum, **kwargs):
+	def __init__(self, semitone, volume, **kwargs):
 		kwargs["tooltip"] = note_name(semitone)+" ("+str(semitone)+") ["+str(semitone_to_frequency(semitone))+" Hz]"
 
 		goocanvas.ItemSimple.__init__(self,**kwargs)
@@ -125,7 +126,7 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
 		self.volume = volume
 
-		self.gradient = spectrum.get_gradient()
+		self.gradient = None
 		self.matrix = cairo.Matrix()
 		self.matrix.scale(1./self.width,1.)
 		self.matrix.translate((semitone-0.5)*self.width, 0)
@@ -145,9 +146,13 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 		cr.translate(self.x, self.y)
 		cr.rectangle(0.0, 0.0, self.width, self.height)
 
-		self.gradient.set_matrix(self.matrix)
-		cr.set_source(self.gradient)
-#		cr.set_source_rgb(0.,0.,1.)
+		if not self.gradient:
+			cr.set_source_rgb(1.,1.,1.)
+			print "painted white"
+		else:
+			self.gradient.set_matrix(self.matrix)
+			cr.set_source(self.gradient)
+			print "painted"
 
 		cr.fill_preserve()
 		cr.set_source_rgb(0.,0.,0.)
@@ -185,6 +190,10 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 	def release(self,item,target,event):
 		self.pipeline.set_state(gst.STATE_NULL)
 
+	def set_spectrum(self,obj,prop):
+		spectrum = obj.get_property(prop.name)
+		self.gradient = spectrum.get_gradient()
+
 gobject.type_register(Semitone)
 
 class SemitoneOld(goocanvas.Rect):
@@ -221,10 +230,10 @@ class SemitoneOld(goocanvas.Rect):
 
 class Fretboard2(goocanvas.Table):
 	__gproperties__ = {
-		'spectrum': (gobject.TYPE_DOUBLE,'X','x coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE)
+		'spectrum': (gobject.TYPE_PYOBJECT,'Spectrum','SpectrumData object to display',gobject.PARAM_READWRITE)
 	}
 
-	def __init__(self, frets=12, strings=None, spectrum=None,**kwargs):
+	def __init__(self, frets=12, strings=None, **kwargs):
 		goocanvas.Table.__init__(self,**kwargs)
 
 		if "width" in kwargs:
@@ -243,26 +252,50 @@ class Fretboard2(goocanvas.Table):
 			strings = [-5,-10,-14,-19,-24,-29]
 
 		self.volume = gtk.Adjustment(0.04,0.0,10.0,0.01)
+		self.spectrum = None
+		self.strings = strings
+		self.frets = frets
 
 		for i in xrange(len(strings)):
 			semitone = strings[i]
 
 			for fret in xrange(frets+1):
-				rect = Semitone(semitone+fret, self.volume, spectrum, parent=self)
+				rect = Semitone(semitone+fret, self.volume, parent=self)
 				self.set_child_properties(rect, row=i, column=fret)
+				self.connect("notify::spectrum", rect.set_spectrum)
 
 #		r = Semitone2(0,self.volume,parent=self)
 #		self.set_child_properties(r, row=0, column=frets+1)
 #		print "width",r.get_bounds().x2 - r.get_bounds().x1
-
-		self.strings = strings
-		self.frets = frets
 
 	def get_width(self):
 		return self.get_bounds().x2 - self.get_bounds().x1
 
 	def get_height(self):
 		return self.get_bounds().y2 - self.get_bounds().y1
+
+	# custom properties
+	def do_get_property(self,pspec):
+		return getattr(self, pspec.name)
+
+	def do_set_property(self,pspec,value):
+		setattr(self, pspec.name, value)
+
+gobject.type_register(Fretboard2)
+
+class FretboardVis(goocanvas.Canvas):
+	def __init__(self,*args,**kwargs):
+		goocanvas.Canvas.__init__(self,*args,**kwargs)
+
+		self.set_property("has-tooltip",True)
+		self.f = Fretboard2(parent=self.get_root_item())
+		width = self.f.get_width()
+		height = self.f.get_height()
+		self.set_bounds(0,0,width,height)
+		self.set_size_request(width,height)
+
+	def set_spectrum(self,spectrum):
+		self.f.props.spectrum = spectrum
 
 class SpectrumData:
 	""" holds data for visualizers, calculates and caches different scales """

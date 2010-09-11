@@ -181,7 +181,7 @@ class Transcribe:
 
 	# glade callbacks - windows menu
 	def open_fretboard(self,widget):
-		fretboard = Visualizer.Fretboard()
+		fretboard = Visualizer.FretboardVis()
 		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
 
 	def open_total(self,widget):
