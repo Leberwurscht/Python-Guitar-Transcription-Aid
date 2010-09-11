@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import gtk, numpy, cairo, goocanvas
+import gtk, numpy, cairo, goocanvas, gobject
 import spectrumvisualizer
 import gst
 import scipy.interpolate
@@ -100,25 +100,94 @@ def semitone_to_frequency(semitone):
 	frequency = REFERENCE_FREQUENCY * (2.**(1./12.))**semitone
 	return frequency
 
-class FretOnStringTest(goocanvas.ItemSimple, goocanvas.Item):
-	def __init__(self, x, y, width, height, **kwargs):
-		goocanvas.ItemSimple.__init__(**kwargs)
-		self.x = x
-		self.y = y
-		self.width = width
-		self.height = height
+class Semitone(goocanvas.ItemSimple, goocanvas.Item):
+	__gproperties__ = {
+		'x': (gobject.TYPE_DOUBLE,'X','x coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
+		'y': (gobject.TYPE_DOUBLE,'Y','y coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
+		'width': (gobject.TYPE_DOUBLE,'Width','Width',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,30,gobject.PARAM_READWRITE),
+		'height': (gobject.TYPE_DOUBLE,'Height','Height',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,20,gobject.PARAM_READWRITE)
+	}
 
-	def do_simple_create_path(self, cr):
-		cr.rectangle(self.x, self.y, self.width, self.height)
-		cr.move_to(self.x, self.y)
-		cr.line_to(self.x + self.width, self.y + self.height)
-		cr.move_to(self.x + self.width, self.y)
-		cr.line_to(self.x, self.y + self.height)
+	def __init__(self, semitone, volume, spectrum, **kwargs):
+		kwargs["tooltip"] = note_name(semitone)+" ("+str(semitone)+") ["+str(semitone_to_frequency(semitone))+" Hz]"
 
-	def do_button_press_event(self, target, event):
-		print "button press!"
+		goocanvas.ItemSimple.__init__(self,**kwargs)
 
-class Semitone(goocanvas.Rect):
+		self.x = self.props.x
+		self.y = self.props.y
+		self.width = self.props.width
+		self.height = self.props.height
+
+		self.semitone = semitone
+		self.connect("button_press_event", self.press)
+		self.connect("button_release_event", self.release)
+
+		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
+		self.volume = volume
+
+		self.gradient = spectrum.get_gradient()
+		self.matrix = cairo.Matrix()
+		self.matrix.scale(1./self.width,1.)
+		self.matrix.translate((semitone-0.5)*self.width, 0)
+
+	# custom properties
+	def do_get_property(self,pspec):
+		if hasattr(self, pspec.name):
+			return getattr(self, pspec.name)
+		else:
+			return pspec.default_value
+
+	def do_set_property(self,pspec,value):
+		setattr(self, pspec.name, value)
+
+	# override ItemSimple
+	def do_simple_paint(self, cr, bounds):
+		cr.translate(self.x, self.y)
+		cr.rectangle(0.0, 0.0, self.width, self.height)
+
+		self.gradient.set_matrix(self.matrix)
+		cr.set_source(self.gradient)
+#		cr.set_source_rgb(0.,0.,1.)
+
+		cr.fill_preserve()
+		cr.set_source_rgb(0.,0.,0.)
+		cr.stroke()
+
+	def do_simple_update(self, cr):
+		half_line_width = self.get_line_width() / 2.
+
+		self.bounds_x1 = self.x - half_line_width
+		self.bounds_y1 = self.y - half_line_width
+		self.bounds_x2 = self.x + self.width + half_line_width
+		self.bounds_y2 = self.y + self.height + half_line_width
+
+	def do_simple_is_item_at(self, x, y, cr, is_pointer_event):
+		if x < self.x: return False
+		if y < self.y: return False
+		if x > self.x+self.width: return False
+		if y > self.y+self.height: return False
+		return True
+
+	# callbacks
+	def press(self,item,target,event):
+		if event.button==1:
+			self.pipeline.get_by_name("volume").set_property("volume", self.volume.get_value())
+			self.pipeline.get_by_name("src").set_property("freq", semitone_to_frequency(self.semitone))
+			self.pipeline.set_state(gst.STATE_PLAYING)
+		elif event.button==3:
+			menu = gtk.Menu()
+			item = gtk.MenuItem("Add to tabulature")
+#			item.connect("activate", self.)
+			menu.append(item)
+			item.show_all()
+			menu.popup(None, None, None, event.button, event.time)
+
+	def release(self,item,target,event):
+		self.pipeline.set_state(gst.STATE_NULL)
+
+gobject.type_register(Semitone)
+
+class SemitoneOld(goocanvas.Rect):
 	def __init__(self,semitone,volume,**kwargs):
 		if not "width" in kwargs: kwargs["width"]=30
 		if not "height" in kwargs: kwargs["height"]=20
@@ -141,7 +210,7 @@ class Semitone(goocanvas.Rect):
 			self.pipeline.set_state(gst.STATE_PLAYING)
 		elif event.button==3:
 			menu = gtk.Menu()
-			item = gtk.MenuItem("test")
+			item = gtk.MenuItem("Add to tabulature")
 #			item.connect("activate", self.)
 			menu.append(item)
 			item.show_all()
@@ -151,7 +220,11 @@ class Semitone(goocanvas.Rect):
 		self.pipeline.set_state(gst.STATE_NULL)
 
 class Fretboard2(goocanvas.Table):
-	def __init__(self, frets=12, strings=None, **kwargs):
+	__gproperties__ = {
+		'spectrum': (gobject.TYPE_DOUBLE,'X','x coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE)
+	}
+
+	def __init__(self, frets=12, strings=None, spectrum=None,**kwargs):
 		goocanvas.Table.__init__(self,**kwargs)
 
 		if "width" in kwargs:
@@ -175,8 +248,12 @@ class Fretboard2(goocanvas.Table):
 			semitone = strings[i]
 
 			for fret in xrange(frets+1):
-				rect = Semitone(semitone+fret, self.volume, parent=self)
+				rect = Semitone(semitone+fret, self.volume, spectrum, parent=self)
 				self.set_child_properties(rect, row=i, column=fret)
+
+#		r = Semitone2(0,self.volume,parent=self)
+#		self.set_child_properties(r, row=0, column=frets+1)
+#		print "width",r.get_bounds().x2 - r.get_bounds().x1
 
 		self.strings = strings
 		self.frets = frets
@@ -197,6 +274,7 @@ class SpectrumData:
 		self.semitone = None
 		self.power_spline = None
 		self.powerfreq_spline = None
+		self.gradient = None
 
 		if "method" in kwargs:
 			self.method = kwargs["method"]
@@ -271,6 +349,20 @@ class SpectrumData:
 				self.brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 
 		return self.brightness
+
+	def get_gradient(self):
+		if not self.gradient:
+			semitones = self.get_semitone()
+			semitonerange = semitones[-1]-semitones[0]
+			brightness = self.get_brightness()
+
+			self.gradient = cairo.LinearGradient(semitones[0], 0, semitones[-1], 0)
+
+			for i in xrange(len(semitones)):
+				b = brightness[i]
+				self.gradient.add_color_stop_rgb( ( semitones[i]-semitones[0] ) / semitonerange, b,b,b)
+
+		return self.gradient
 
 	def get_total_power_in_semitone_range(self,lower,upper,overtones=10):
 		l = semitone_to_frequency(lower)

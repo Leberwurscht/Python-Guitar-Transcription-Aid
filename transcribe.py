@@ -213,10 +213,25 @@ class Transcribe:
 		w.plot_spectrum(frq, power)
 
 	def compare(self,widget):
+		if not self.project: return
+
+		marker = self.project.timeline.ruler.get_playback_marker()
+		if not marker: return
+
+		start,duration = marker
+
+		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
+
+		if self.builder.get_object("cutoff_button").get_active():
+			max_magnitude = self.builder.get_object("cutoff").get_value()
+		else:
+			max_magnitude = None
+
+		spectrum = Visualizer.SpectrumData(frq, power=power, max_magnitude=max_magnitude)
 
 		c = goocanvas.Canvas()
 		c.set_property("has-tooltip",True)
-		f = Visualizer.Fretboard2(parent=c.get_root_item())
+		f = Visualizer.Fretboard2(spectrum=spectrum,parent=c.get_root_item())
 		width = f.get_width()
 		height = f.get_height()
 		c.set_bounds(0,0,width,height)
