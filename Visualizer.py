@@ -111,8 +111,9 @@ def semitone_to_frequency(semitone):
 # class Fretboard(FretboardBase)
 # class SingleString(FretboardBase)
 #
-# class FretboardWindow(gtk.Window)
-# class SingleStringWindow(gtk.Window)
+# class FretboardWindowBase(gtk.Window)
+# class FretboardWindow(FretboardWindowBase)
+# class SingleStringWindow(FretboardWindowBase)
 # [class PlotWindow(gtk.Window)]
 
 # problem: if x or y is changed, will update be called?
@@ -251,96 +252,97 @@ class FretboardBase(goocanvas.Group):
 		'spectrum': (gobject.TYPE_PYOBJECT,'Spectrum','SpectrumData object to display',gobject.PARAM_READWRITE)
 	}
 
-	def __init__(self, volume, frets=12, strings=None, **kwargs):
-		goocanvas.Group.__init__(self,**kwargs)
+	def __init__(self, volume, **kwargs):
 
 		self.volume = volume
 		self.spectrum = None
 
-		if "strings" in kwargs: self.strings = kwargs["strings"]
+		if "strings" in kwargs:
+			self.strings = kwargs["strings"]
+			del kwargs["strings"]
 		else: self.strings = [-5,-10,-14,-19,-24,-29]
 
-		if "frets" in kwargs: self.frets = kwargs["frets"]
+		if "frets" in kwargs:
+			self.frets = kwargs["frets"]
+			del kwargs["frets"]
 		else: self.frets = 12
 
-		if "rectwidth" in kwargs: self.rectwidth = kwargs["rectwidth"]
+		if "rectwidth" in kwargs:
+			self.rectwidth = kwargs["rectwidth"]
+			del kwargs["rectwidth"]
 		else: self.rectwidth = 30
 
-		if "rectheight" in kwargs: self.rectheight = kwargs["rectheight"]
+		if "rectheight" in kwargs:
+			self.rectheight = kwargs["rectheight"]
+			del kwargs["rectheight"]
 		else: self.rectheight = 20
 
-		if "paddingx" in kwargs: self.paddingx = kwargs["paddingx"]
+		if "paddingx" in kwargs:
+			self.paddingx = kwargs["paddingx"]
+			del kwargs["paddingx"]
 		else: self.paddingx = 5
 
-		if "paddingy" in kwargs: self.paddingy = kwargs["paddingy"]
+		if "paddingy" in kwargs:
+			self.paddingy = kwargs["paddingy"]
+			del kwargs["paddingy"]
 		else: self.paddingy = 7
 
-		if "magnitude_max" in kwargs: self.magnitude_max = kwargs["magnitude_max"]
-		else: self.magnitude_max = 0
-
-		if "markers_radius" in kwargs: self.markers_radius = kwargs["markers_radius"]
+		if "markers_radius" in kwargs:
+			self.markers_radius = kwargs["markers_radius"]
+			del kwargs["markers_radius"]
 		else: self.markers_radius = self.rectheight/4.
 
-		if "markers" in kwargs: self.markers = kwargs["markers"]
+		if "markers" in kwargs:
+			self.markers = kwargs["markers"]
+			del kwargs["markers"]
 		else: self.markers = [5,7,9]
 
-		if "capo" in kwargs: self.capo = kwargs["capo"]
+		if "capo" in kwargs:
+			self.capo = kwargs["capo"]
+			del kwargs["capo"]
 		else: self.capo = 0
 
-		if "method" in kwargs: self.method = kwargs["method"]
+		if "method" in kwargs:
+			self.method = kwargs["method"]
+			del kwargs["method"]
 		else: self.method = "gradient"
 
-		# captions
-		fretcaptions = goocanvas.Group(parent=self)
-		for fret in xrange(1,self.frets+1):
-			goocanvas.Text(parent=fretcaptions, x=fret*self.rectwidth, y=0, text=str(fret), anchor=gtk.ANCHOR_NORTH, font=10)
+		goocanvas.Group.__init__(self,**kwargs)
 
-		stringcaptions = goocanvas.Group(parent=self)
-		for string in xrange(len(self.strings)):
-			semitone = self.strings[string]
-			name = note_name(semitone).upper()
-			goocanvas.Text(parent=stringcaptions, x=0, y=string*self.rectheight, text=name, anchor=gtk.ANCHOR_EAST, font=10)
+		self.construct(self.paddingx, self.paddingy)
 
-		startx = self.paddingx + stringcaptions.get_bounds().x2-stringcaptions.get_bounds().x1 + 5
-		starty = self.paddingy + fretcaptions.get_bounds().y2-fretcaptions.get_bounds().y1
-
-		fretcaptions.props.x = startx + 0.5*self.rectwidth
-		fretcaptions.props.y = self.paddingy
-
-		stringcaptions.props.x = startx - 5
-		stringcaptions.props.y = starty + 0.5*self.rectheight
-
+	def construct(self, posx, posy):
 		# fretboard
 		for string in xrange(len(self.strings)):
 			semitone = self.strings[string]
 
 			for fret in xrange(self.frets+1):
-				x = startx + fret*self.rectwidth
-				y = starty + self.rectheight*string
-				rect = Semitone(semitone+fret, self.volume, parent=self, x=x, y=y)
+				x = posx + fret*self.rectwidth
+				y = posy + self.rectheight*string
+				rect = Semitone(semitone+fret, self.volume, parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
 				self.connect("notify::spectrum", rect.set_spectrum)
 
-		y = starty + self.rectheight*(len(self.strings) + 0.5)
+		y = posy + self.rectheight*(len(self.strings) + 0.5)
 		for fret in self.markers:
-			x = startx + self.rectwidth*(fret+0.5)
+			x = posx + self.rectwidth*(fret+0.5)
 			circle = goocanvas.Ellipse(parent=self, center_x=x, center_y=y, radius_x=self.markers_radius, radius_y=self.markers_radius)
 			circle.props.fill_color_rgba=0x333333ff
 			circle.props.line_width=0
 
 		if self.capo:
-			x = startx + self.rectwidth*(self.capo+.3)
-			y1 = starty
-			y2 = starty + self.rectheight*len(self.strings)
+			x = posx + self.rectwidth*(self.capo+.3)
+			y1 = posy
+			y2 = posy + self.rectheight*len(self.strings)
 			width = self.rectwidth/3
-			goocanvas.polyline_new_line(self, x,y1,x,y2, width=line_width, stroke_color_rgba=0x660000ff)
+			goocanvas.polyline_new_line(self, x,y1,x,y2, width=line_width, stroke_color_rgba=0x660000ff, pointer_events=0)
 
 		# draw nut
-		x = startx + self.rectwidth*.3
-		y1 = starty
-		y2 = starty + self.rectheight*len(self.strings)
+		x = posx + self.rectwidth*.3
+		y1 = posy
+		y2 = posy + self.rectheight*len(self.strings)
 		width = self.rectwidth/3
-		goocanvas.polyline_new_line(self, x,y1,x,y2, line_width=width, stroke_color_rgba=0xcc0000ff)
-
+		goocanvas.polyline_new_line(self, x,y1,x,y2, line_width=width, stroke_color_rgba=0xcc0000ff, pointer_events=0)
+		
 	def get_width(self):
 		return self.get_bounds().x2 - self.get_bounds().x1 + 2*self.paddingx
 
@@ -356,6 +358,140 @@ class FretboardBase(goocanvas.Group):
 
 gobject.type_register(FretboardBase)
 
+class Fretboard(FretboardBase):
+	def __init__(self, volume, **kwargs):
+		FretboardBase.__init__(self, volume, **kwargs)
+
+	def construct(self, posx, posy):
+		# captions
+		fretcaptions = goocanvas.Group(parent=self)
+		for fret in xrange(1,self.frets+1):
+			goocanvas.Text(parent=fretcaptions, x=fret*self.rectwidth, y=0, text=str(fret), anchor=gtk.ANCHOR_NORTH, font=10)
+
+		stringcaptions = goocanvas.Group(parent=self)
+		for string in xrange(len(self.strings)):
+			semitone = self.strings[string]
+			name = note_name(semitone).upper()
+			goocanvas.Text(parent=stringcaptions, x=0, y=string*self.rectheight, text=name, anchor=gtk.ANCHOR_EAST, font=10)
+
+		startx = posx + stringcaptions.get_bounds().x2-stringcaptions.get_bounds().x1 + 5
+		starty = posy + fretcaptions.get_bounds().y2-fretcaptions.get_bounds().y1
+
+		fretcaptions.props.x = startx + 0.5*self.rectwidth
+		fretcaptions.props.y = posy
+
+		stringcaptions.props.x = startx - 5
+		stringcaptions.props.y = starty + 0.5*self.rectheight
+
+		# fretboard
+		FretboardBase.construct(self, startx, starty)
+
+class SingleString(FretboardBase):
+	def __init__(self, volume, **kwargs):
+		if "tuning" in kwargs:
+			self.tuning = kwargs["tuning"]
+			del kwargs["tuning"]
+		else: self.tuning = -5
+
+		if "overtones" in kwargs:
+			self.overtones = kwargs["overtones"]
+			del kwargs["overtones"]
+		else: self.overtones = 10
+
+		if not "rectheight" in kwargs: kwargs["rectheight"] = 10
+
+		kwargs["strings"] = []
+		for multiplicator in xrange(1,self.overtones+2):
+			semitone = self.tuning + 12.*numpy.log2(multiplicator)
+			kwargs["strings"].append(semitone)
+
+		FretboardBase.__init__(self, volume, **kwargs)
+
+	def construct(self, posx, posy):
+		# captions
+		fretcaptions = goocanvas.Group(parent=self)
+		for fret in xrange(1,self.frets+1):
+			goocanvas.Text(parent=fretcaptions, x=fret*self.rectwidth, y=0, text=str(fret), anchor=gtk.ANCHOR_NORTH, font=10)
+
+		stringcaptions = goocanvas.Group(parent=self)
+		goocanvas.Text(parent=stringcaptions, x=0, y=0, text="f.", anchor=gtk.ANCHOR_EAST, font=10)
+		for overtone in xrange(self.overtones):
+			name = str(overtone)+"."
+			goocanvas.Text(parent=stringcaptions, x=0, y=(overtone+1)*self.rectheight, text=name, anchor=gtk.ANCHOR_EAST, font=10)
+
+		startx = posx + stringcaptions.get_bounds().x2-stringcaptions.get_bounds().x1 + 5
+		starty = posy + fretcaptions.get_bounds().y2-fretcaptions.get_bounds().y1
+
+		fretcaptions.props.x = startx + 0.5*self.rectwidth
+		fretcaptions.props.y = posy
+
+		stringcaptions.props.x = startx - 5
+		stringcaptions.props.y = starty + 0.5*self.rectheight
+
+		# fretboard
+		FretboardBase.construct(self, startx, starty)
+
+class FretboardWindowBase(gtk.Window):
+	def __init__(self, *args, **kwargs):
+		gtk.Window.__init__(self,*args,**kwargs)
+
+		vbox = gtk.VBox()
+		self.add(vbox)
+
+		self.controls = gtk.VBox()
+		vbox.add(self.controls)
+
+		hbox = gtk.HBox()
+		vbox.add(hbox)
+
+		label = gtk.Label("Volume")
+		hbox.add(label)
+
+		self.volume = gtk.Adjustment(0.04,0.0,10.0,0.01)
+		spinbtn = gtk.SpinButton(self.volume,0.01,2)
+		hbox.add(spinbtn)
+
+		self.canvas = goocanvas.Canvas()
+		self.connect_after("realize", self.set_default_background, self.canvas)
+		self.canvas.set_property("has-tooltip", True)
+		vbox.add(self.canvas)
+
+	def adjust_canvas_size(self):
+		width = self.visualizer.get_width()
+		height = self.visualizer.get_height()
+		self.canvas.set_bounds(0,0,width,height)
+		self.canvas.set_size_request(int(width),int(height))
+
+	def set_default_background(self, from_widget, to_widget):
+		# background color is only available when widget is realized
+		color = from_widget.get_style().bg[gtk.STATE_NORMAL]
+		to_widget.set_property("background_color", color)
+
+	def set_spectrum(self, spectrum):
+		self.visualizer.props.spectrum = spectrum
+
+class FretboardWindow(FretboardWindowBase):
+	def __init__(self, *args, **kwargs):
+		FretboardWindowBase.__init__(self,*args,**kwargs)
+
+		self.set_title("Fretboard")
+
+		root = self.canvas.get_root_item()
+		self.visualizer = Fretboard(self.volume, parent=root)
+
+		self.adjust_canvas_size()
+
+class SingleStringWindow(FretboardWindowBase):
+	def __init__(self, tuning=-5, *args, **kwargs):
+		FretboardWindowBase.__init__(self,*args,**kwargs)
+
+		self.set_title("SingleString "+note_name(tuning)+" ("+str(tuning)+")")
+
+		root = self.canvas.get_root_item()
+		self.visualizer = SingleString(self.volume, parent=root, tuning=tuning)
+
+		self.adjust_canvas_size()
+
 class FretboardVis(goocanvas.Canvas):
 	def __init__(self,*args,**kwargs):
 		goocanvas.Canvas.__init__(self,*args,**kwargs)
@@ -363,11 +499,14 @@ class FretboardVis(goocanvas.Canvas):
 
 		adj = gtk.Adjustment(0.04,0.0,10.0,0.01)
 		self.set_property("has-tooltip",True)
-		self.f = FretboardBase(adj,parent=self.get_root_item())
+		self.f = Fretboard(adj,parent=self.get_root_item())
 		width = self.f.get_width()
 		height = self.f.get_height()
 		self.set_bounds(0,0,width,height)
 		self.set_size_request(int(width),int(height))
+
+		w = FretboardWindow()
+		w.show_all()
 
 	def set_spectrum(self,spectrum):
 		self.f.props.spectrum = spectrum
@@ -574,7 +713,7 @@ class SpectrumData:
 	def get_power_in_frequency_range(self,lower,upper):
 		return self.get_power_spline().integral(lower, upper)
 
-class Fretboard(gtk.DrawingArea):
+class FretboardCairo(gtk.DrawingArea):
 	def __init__(self,*args,**kwargs):
 		gtk.DrawingArea.__init__(self,*args)
 		self.connect("expose_event", self.draw)
@@ -765,7 +904,7 @@ class Fretboard(gtk.DrawingArea):
 		b = brightness[fret]
 		context.set_source_rgb(b,b,b)
 
-class TotalFretboard(Fretboard):
+class TotalFretboardCairo(FretboardCairo):
 	def __init__(self,*args,**kwargs):
 		if "overtones" in kwargs: self.overtones = kwargs["overtones"]
 		else: self.overtones = 10
@@ -814,7 +953,7 @@ class TotalFretboard(Fretboard):
 
 		context.set_source_rgb(brightness, brightness, brightness)
 
-class SingleStringArea(TotalFretboard):
+class SingleStringAreaCairo(TotalFretboardCairo):
 	""" Displays spectrum on one string, but also for overtones. """
 	def __init__(self,*args,**kwargs):
 		if "tune" in kwargs: self.tune = kwargs["tune"]
@@ -840,7 +979,7 @@ class SingleStringArea(TotalFretboard):
 	def draw(self, widget, event):
 		Fretboard.draw(self, widget, event)
 
-class SingleString(Fretboard):
+class SingleStringCairo(FretboardCairo):
 	""" Displays spectrum on one string, but also for overtones. """
 	def __init__(self,*args,**kwargs):
 		if "tune" in kwargs: self.tune = kwargs["tune"]

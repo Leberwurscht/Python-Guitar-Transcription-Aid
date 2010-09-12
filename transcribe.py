@@ -181,8 +181,16 @@ class Transcribe:
 
 	# glade callbacks - windows menu
 	def open_fretboard(self,widget):
-		fretboard = Visualizer.FretboardVis()
-		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
+		w = Visualizer.FretboardWindow()
+		w.show_all()
+
+		self.visualizers.append(w)
+		w.connect("delete_event", self.close_visualizer)
+#		fretboard = Visualizer.FretboardVis()
+#		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
+
+	def close_visualizer(self, visualizer, event):
+		self.visualizers.remove(visualizer)
 
 	def open_total(self,widget):
 #		fretboard = Visualizer.TotalFretboard()
@@ -190,8 +198,13 @@ class Transcribe:
 		Visualizer.VisualizerWindow(self.visualizers, "TotalFretboard", fretboard)
 
 	def open_singlestring(self,widget,string,semitone):
-		singlestring = Visualizer.SingleString(tune=semitone)
-		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
+		w = Visualizer.SingleStringWindow(tuning=semitone)
+		w.show_all()
+
+		self.visualizers.append(w)
+		w.connect("delete_event", self.close_visualizer)
+#		singlestring = Visualizer.SingleString(tune=semitone)
+#		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
 
 	def open_singlestringarea(self,widget,string,semitone):
 		fretboard = Visualizer.SingleString(tune=semitone, method="cumulate")
@@ -400,7 +413,7 @@ class Transcribe:
 		spectrum = Visualizer.SpectrumData(frq, power=power, max_magnitude=max_magnitude)
 
 		for viswindow in self.visualizers:
-			viswindow.visualizer.set_spectrum(spectrum)
+			viswindow.set_spectrum(spectrum)
 
 	def playback_marker_previous(self, *args):
 		if not self.project: return
@@ -633,7 +646,7 @@ class Transcribe:
 		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes, min_magnitude=threshold, max_magnitude=max_magnitude)
 
 		for viswindow in self.visualizers:
-			viswindow.visualizer.set_spectrum(spectrum)
+			viswindow.set_spectrum(spectrum)
 
 	# position marker callback
 	def update_position_marker(self,*args):
