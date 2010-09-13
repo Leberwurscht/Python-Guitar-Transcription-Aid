@@ -4,12 +4,12 @@
 from distutils.core import setup
 from dsextras import PkgConfigExtension
 
-module1 = PkgConfigExtension(name='spectrumvisualizer',
+spectrumdata = PkgConfigExtension(name='SpectrumData',
 	pkc_name = 'gstreamer-0.10',
 	pkc_version = '',
-	sources = ['spectrumvisualizer.c'])
+	sources = ['spectrumdata.c'])
 
-setup(name = 'spectrumvisualizer',
+setup(name = 'spectrumdata',
 	version = '1.0',
-	description = 'This is a demo package',
-	ext_modules = [module1])
+	description = 'Module containing SpectrumData base class',
+	ext_modules = [spectrumdata])

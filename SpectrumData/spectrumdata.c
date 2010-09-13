@@ -6,7 +6,7 @@
 // http://faq.pygtk.org/index.py?req=show&file=faq23.015.htp
 // http://cgit.freedesktop.org/gstreamer/gst-plugins-good/tree/tests/examples/spectrum/demo-osssrc.c
 
-// for subclassing, will be set by initspectrumvisualizer
+// for subclassing, will be set by initSpectrumData
 static PyTypeObject *PyGObject_Type=NULL;
 
 // "base" class
@@ -20,7 +20,7 @@ typedef struct {
 static PyTypeObject baseType = {
 	PyObject_HEAD_INIT(NULL)
 	0,
-	"spectrumvisualizer.base",
+	"SpectrumData.base",
 	sizeof(base)
 };
 
@@ -58,8 +58,8 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 // get spectrum messages and delay them
 static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 {
-	base *visualizer_object = data;
-	GstElement *spectrum = GST_ELEMENT(visualizer_object->spectrum_element->obj);
+	base *base_object = data;
+	GstElement *spectrum = GST_ELEMENT(base_object->spectrum_element->obj);
 	gst_object_ref(spectrum);
 
 	GstElement *message_element = GST_ELEMENT(GST_MESSAGE_SRC(message));
@@ -90,14 +90,14 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 		if (GST_CLOCK_TIME_IS_VALID(waittime))
 		{
 			GstClockTime basetime = gst_element_get_base_time(spectrum);
-			GstClockID clock_id = gst_clock_new_single_shot_id(visualizer_object->sync_clock, basetime+waittime);
+			GstClockID clock_id = gst_clock_new_single_shot_id(base_object->sync_clock, basetime+waittime);
 			spectrum_message *mess = g_malloc(sizeof(spectrum_message));
 
 			// set bands and threshold
 			g_object_get(message_element, "bands", &(mess->bands), "threshold", &(mess->threshold), NULL);
 
 			// set rate
-			GstPad *sink = gst_element_get_static_pad(GST_ELEMENT(visualizer_object->spectrum_element->obj), "sink");
+			GstPad *sink = gst_element_get_static_pad(GST_ELEMENT(base_object->spectrum_element->obj), "sink");
 			GstCaps *caps = gst_pad_get_negotiated_caps(sink);
 			gst_object_unref(sink);
 
@@ -122,7 +122,7 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 			PyGILState_Release(gstate);
 
 			// set gobj
-			GObject *gobj = (visualizer_object->gobj).obj;
+			GObject *gobj = (base_object->gobj).obj;
 			g_assert(gobj != NULL);
 			g_object_ref(gobj);
 			mess->gobj = gobj;
@@ -166,7 +166,7 @@ static int base_init(base *self, PyObject *args, PyObject *kwds)
 	return 0;
 }
 
-PyMODINIT_FUNC initspectrumvisualizer(void)
+PyMODINIT_FUNC initSpectrumData(void)
 {
 	init_pygobject();
 
@@ -181,7 +181,7 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	baseType.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
 	baseType.tp_init = (initproc)base_init;
 	baseType.tp_members = base_members;
-	baseType.tp_doc = "spectrum visualizer base object";
+	baseType.tp_doc = "SpectrumData base class";
 
 	if (PyType_Ready(&baseType)<0) return;
 
@@ -220,8 +220,8 @@ PyMODINIT_FUNC initspectrumvisualizer(void)
 	// don't need gobject_module anymore
 	Py_DECREF(gobject_module);
 
-	// add "base" class to "spectrumvisualizer" module
-	PyObject *module = Py_InitModule3("spectrumvisualizer", NULL, "Spectrum visualizer");
+	// add "base" class to "SpectrumData" module
+	PyObject *module = Py_InitModule3("SpectrumData", NULL, "Module containing SpectrumData base class");
 	Py_INCREF(&baseType);
 	PyModule_AddObject(module, "base", (PyObject*)&baseType);
 }

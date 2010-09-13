@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import json
-import Pipeline, Timeline, spectrumvisualizer
+import Pipeline, Timeline, Visualizer
 
 class InvalidFileFormat(Exception): pass
 
@@ -74,7 +74,8 @@ class Project:
 		self.pipeline = Pipeline.Pipeline(self.audiofile)
 		self.timeline = Timeline.Timeline(self, strings)
 		self.timeline.show_all()
-		self.spectrumlistener = spectrumvisualizer.base(self.pipeline.spectrum, self.pipeline)
+#		self.spectrumlistener = spectrumvisualizer.base(self.pipeline.spectrum, self.pipeline)
+		self.spectrumdata = Visualizer.SpectrumData(self.pipeline)
 
 	def save(self):
 		f = open(self.filename, "w")
@@ -121,4 +122,4 @@ class Project:
 		del self.appsinkpipeline
 		del self.pipeline
 		del self.timeline
-		del self.spectrumlistener
+		del self.spectrumdata

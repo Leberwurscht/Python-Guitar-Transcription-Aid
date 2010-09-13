@@ -32,27 +32,27 @@ class Transcribe:
 		self.builder.get_object("tap").add_accelerator("clicked", agr, key, mod, gtk.ACCEL_VISIBLE)
 
 		# create menu items for SingleString visualizers
-		singlestring = self.builder.get_object("singlestring")
-		singlestrings = gtk.Menu()
+#		singlestring = self.builder.get_object("singlestring")
+#		singlestrings = gtk.Menu()
+#
+#		for string, semitone in Visualizer.standard_tuning.iteritems():
+#			stringitem = gtk.MenuItem(str(string))
+#			stringitem.connect("activate", self.open_singlestring, string, semitone)
+#			singlestrings.append(stringitem)
+#
+#		singlestring.set_submenu(singlestrings)
+#		singlestrings.show_all()
 
-		for string, semitone in Visualizer.standard_tuning.iteritems():
-			stringitem = gtk.MenuItem(str(string))
-			stringitem.connect("activate", self.open_singlestring, string, semitone)
-			singlestrings.append(stringitem)
+#		singlestring = self.builder.get_object("singlestringarea")
+#		singlestrings = gtk.Menu()
 
-		singlestring.set_submenu(singlestrings)
-		singlestrings.show_all()
+#		for string, semitone in Visualizer.standard_tuning.iteritems():
+#			stringitem = gtk.MenuItem(str(string))
+#			stringitem.connect("activate", self.open_singlestringarea, string, semitone)
+#			singlestrings.append(stringitem)
 
-		singlestring = self.builder.get_object("singlestringarea")
-		singlestrings = gtk.Menu()
-
-		for string, semitone in Visualizer.standard_tuning.iteritems():
-			stringitem = gtk.MenuItem(str(string))
-			stringitem.connect("activate", self.open_singlestringarea, string, semitone)
-			singlestrings.append(stringitem)
-
-		singlestring.set_submenu(singlestrings)
-		singlestrings.show_all()
+#		singlestring.set_submenu(singlestrings)
+#		singlestrings.show_all()
 
 		# update position marker
 		gobject.timeout_add(100, self.update_position_marker)
@@ -70,7 +70,7 @@ class Transcribe:
 	def set_project(self, project):
 		if self.project: return False
 
-		project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
+#		project.spectrumlistener.connect("magnitudes_available", self.on_magnitudes)
 		project.timeline.connect("notify::mode", self.mode_changed)
 		project.timeline.props.mode = Project.Timeline.MODE_DEFAULT
 		self.builder.get_object("position").set_adjustment(project.timeline.ruler.marker_start)
@@ -78,6 +78,7 @@ class Transcribe:
 		self.builder.get_object("timelinecontainer").add(project.timeline)
 
 		self.project = project
+		self.set_autoupdate()
 
 		return True
 
@@ -181,11 +182,13 @@ class Transcribe:
 
 	# glade callbacks - windows menu
 	def open_fretboard(self,widget):
-		w = Visualizer.FretboardWindow()
+		if not self.project: return
+
+		w = Visualizer.FretboardWindow(self.project.spectrumdata)
 		w.show_all()
 
-		self.visualizers.append(w)
-		w.connect("delete_event", self.close_visualizer)
+#		self.visualizers.append(w)
+#		w.connect("delete_event", self.close_visualizer)
 #		fretboard = Visualizer.FretboardVis()
 #		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
 
@@ -391,9 +394,12 @@ class Transcribe:
 		self.builder.get_object("pause").set_active(False)
 		self.builder.get_object("stop").set_sensitive(False)
 
-	def toggle_autoupdate(self,widget):
-		if widget.get_active(): self.autoupdate = True
-		else: self.autoupdate = False		
+	def set_autoupdate(self, *args):
+		if not self.project: return
+
+		self.project.spectrumdata.props.autoupdate = self.builder.get_object("autoupdate").get_active()
+#		if widget.get_active(): self.autoupdate = True
+#		else: self.autoupdate = False		
 
 	def update_visualizers(self,widget):
 		if not self.project: return
@@ -405,15 +411,16 @@ class Transcribe:
 
 		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
 
-		if self.builder.get_object("cutoff_button").get_active():
-			max_magnitude = self.builder.get_object("cutoff").get_value()
-		else:
-			max_magnitude = None
+#		if self.builder.get_object("cutoff_button").get_active():
+#			max_magnitude = self.builder.get_object("cutoff").get_value()
+#		else:
+#			max_magnitude = None
 
-		spectrum = Visualizer.SpectrumData(frq, power=power, max_magnitude=max_magnitude)
-
-		for viswindow in self.visualizers:
-			viswindow.set_spectrum(spectrum)
+		self.project.spectrumdata.set_power(frq, power)
+#		spectrum = Visualizer.SpectrumData(frq, power=power, max_magnitude=max_magnitude)
+#
+#		for viswindow in self.visualizers:
+#			viswindow.set_spectrum(spectrum)
 
 	def playback_marker_previous(self, *args):
 		if not self.project: return

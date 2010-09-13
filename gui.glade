@@ -149,28 +149,6 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkMenuItem" id="menuitem5">
-                        <property name="visible">True</property>
-                        <property name="label" translatable="yes">TotalFretboard</property>
-                        <property name="use_underline">True</property>
-                        <signal name="activate" handler="open_total"/>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuItem" id="singlestring">
-                        <property name="visible">True</property>
-                        <property name="label" translatable="yes">SingleString</property>
-                        <property name="use_underline">True</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkMenuItem" id="singlestringarea">
-                        <property name="visible">True</property>
-                        <property name="label" translatable="yes">SingleStringArea</property>
-                        <property name="use_underline">True</property>
-                      </object>
-                    </child>
-                    <child>
                       <object class="GtkMenuItem" id="plot">
                         <property name="visible">True</property>
                         <property name="label" translatable="yes">Plot</property>
@@ -303,12 +281,12 @@
               </packing>
             </child>
             <child>
-              <object class="GtkToggleToolButton" id="vis_autoupdate">
+              <object class="GtkToggleToolButton" id="autoupdate">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Update Visualizers while Playing</property>
                 <property name="use_underline">True</property>
                 <property name="icon_name">view-refresh</property>
-                <signal name="toggled" handler="toggle_autoupdate"/>
+                <signal name="toggled" handler="set_autoupdate"/>
               </object>
               <packing>
                 <property name="expand">False</property>
