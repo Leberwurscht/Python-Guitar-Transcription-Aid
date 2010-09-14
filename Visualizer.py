@@ -3,7 +3,7 @@
 import gtk, numpy, cairo, goocanvas, gobject
 import gst
 import scipy.interpolate
-from SpectrumData import base as SpectrumDataBase
+from SpectrumData import base as VisualizerControlBase
 
 REFERENCE_FREQUENCY = 440
 standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
@@ -65,10 +65,12 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 		'right-clicked': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,))
 	}
 
-	def __init__(self, spectrum, semitone, volume, **kwargs):
+	def __init__(self, spectrum, semitone, volume, method="gradient", **kwargs):
 		kwargs["tooltip"] = note_name(semitone)+" ("+str(semitone)+") ["+str(semitone_to_frequency(semitone))+" Hz]"
 
 		goocanvas.ItemSimple.__init__(self,**kwargs)
+
+		self.method = method
 
 		self.x = self.props.x
 		self.y = self.props.y
@@ -101,11 +103,42 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 
 		if not self.spectrum.has_data:
 			cr.set_source_rgb(1.,1.,1.)
-		else:
+		elif self.method=="cumulate":
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			magnitude = power_to_magnitude(power / 1.5 / 1000)
+			const,slope = self.spectrum.get_brightness_coefficients_for_magnitude()
+			brightness = slope*magnitude + const
+			print self.semitone,"mag",magnitude,"tpow",power,"b",brightness,"pow",fpower
+			cr.set_source_rgb(brightness,brightness,brightness)
+		elif self.method=="test":
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			upper_dependence = min(1.,upper_dependence)
+			lower_dependence = min(1.,lower_dependence)
+			total_dependence = min(1., upper_dependence+lower_dependence)
+			power *= 1. - total_dependence
+			magnitude = power_to_magnitude(power / 1.5 / 1000)
+			const,slope = self.spectrum.get_brightness_coefficients_for_magnitude()
+			brightness = slope*magnitude + const
+			cr.set_source_rgb(brightness,brightness,brightness)
+		elif self.method=="inharmonicity":
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			brightness = standard_deviation / 0.5
+			cr.set_source_rgb(brightness,brightness,brightness)
+		elif self.method=="lower_dependence":
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			brightness = lower_dependence
+			cr.set_source_rgb(brightness,brightness,brightness)
+		elif self.method=="upper_dependence":
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			brightness = upper_dependence
+			cr.set_source_rgb(brightness,brightness,brightness)
+		elif self.method=="gradient":
 			assert not self.matrix==None
 			gradient = self.spectrum.get_gradient()
 			gradient.set_matrix(self.matrix)
 			cr.set_source(gradient)
+		else:
+			raise ValueError, "Invalid method"
 
 		cr.fill_preserve()
 		cr.set_source_rgb(0.,0.,0.)
@@ -276,6 +309,12 @@ class FretboardBase(goocanvas.Group):
 
 		w.show_all()
 
+	def add_tab_marker(self, item, target, event, string, fret):
+		self.spectrum.emit("add-tab-marker", string, fret)
+
+	def plot_evolution(self, item, target, event, semitone):
+		self.spectrum.emit("plot-evolution", semitone)
+
 	# custom properties
 	def do_get_property(self,pspec):
 		return getattr(self, pspec.name)
@@ -323,9 +362,17 @@ class Fretboard(FretboardBase):
 		item.connect("activate", self.analyze_semitone, item, None, self.strings[string]+fret)
 		menu.append(item)
 
-#		item = gtk.MenuItem("Add to tabulature")
-#		item.connect("activate", self.)
-#		menu.append(item)
+		item = gtk.MenuItem("Plot")
+		item.connect("activate", self.plot_evolution, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Add to tabulature")
+		item.connect("activate", self.add_tab_marker, item, None, string, fret)
+		menu.append(item)
+#		this needs to be received by transcribe
+#		if singlestring gets this, transcribe should also receive that
+#		=> need one common object like spectrumdata that all visualizers share,
+#			perhaps SpectrumData itself, rename it to VisualizerControl
 
 		menu.show_all()
 		menu.popup(None, None, None, event.button, event.time)
@@ -333,6 +380,9 @@ class Fretboard(FretboardBase):
 	def open_string(self, item, target, event, string):
 		w = SingleStringWindow(self.spectrum, self.strings[string])
 		w.show_all()
+
+#	def plot(self, item, target, event, semitone):
+#		self
 
 class SingleString(FretboardBase):
 	def __init__(self, spectrum, volume, **kwargs):
@@ -379,6 +429,42 @@ class SingleString(FretboardBase):
 		# fretboard
 		FretboardBase.construct(self, startx, starty)
 
+		# analyze
+		y = self.get_bounds().y2 + 10
+		for fret in xrange(0,self.frets+1):
+			x = startx + self.rectwidth*fret
+			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+
+		y += self.rectheight
+		for fret in xrange(0,self.frets+1):
+			x = startx + self.rectwidth*fret
+			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+
+		y += self.rectheight
+		for fret in xrange(0,self.frets+1):
+			x = startx + self.rectwidth*fret
+			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+
+		y += self.rectheight
+		for fret in xrange(0,self.frets+1):
+			x = startx + self.rectwidth*fret
+			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+
+		y += self.rectheight
+		for fret in xrange(0,self.frets+1):
+			x = startx + self.rectwidth*fret
+			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+
 	# callbacks
 	def open_context_menu(self, rect, event, string, fret):
 		semitone = self.tuning + fret
@@ -386,11 +472,19 @@ class SingleString(FretboardBase):
 		menu = gtk.Menu()
 
 		item = gtk.MenuItem("Analyze")
-		item.connect("activate", self.analyze_semitone, item, None, self.strings[0]+fret)
+		item.connect("activate", self.analyze_semitone, item, None, self.tuning+fret)
 		menu.append(item)
 
 #		item = gtk.MenuItem("Add to tabulature")
 #		item.connect("activate", self.)
+#		menu.append(item)
+
+		item = gtk.MenuItem("Plot")
+		item.connect("activate", self.plot_evolution, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+#		item = gtk.MenuItem("Add to tabulature")
+#		item.connect("activate", self.add_tab_marker, item, None, string, fret)
 #		menu.append(item)
 
 		menu.show_all()
@@ -457,18 +551,20 @@ class SingleStringWindow(FretboardWindowBase):
 
 		self.adjust_canvas_size()
 
-class SpectrumData(SpectrumDataBase):
+class VisualizerControl(VisualizerControlBase):
 	__gproperties__ = {
 		'autoupdate': (gobject.TYPE_BOOLEAN,'AutoUpdate','Whether to update visualizers while playback',False,gobject.PARAM_READWRITE)
 	}
 
 	__gsignals__ = {
-		'new-data': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ())
+		'new-data': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
+		'add-tab-marker': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT, gobject.TYPE_INT)),
+		'plot-evolution': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,))
 	}
 
 	""" holds data for visualizers, calculates and caches different scales """
 	def __init__(self, pipeline, **kwargs):
-		SpectrumDataBase.__init__(self, pipeline.spectrum, pipeline)
+		VisualizerControlBase.__init__(self, pipeline.spectrum, pipeline)
 		self.autoupdate_handler = self.connect("magnitudes_available", self.autoupdate)
 		self.handler_block(self.autoupdate_handler)
 		self.autoupdate = False
@@ -564,37 +660,47 @@ class SpectrumData(SpectrumDataBase):
 		if self.power==None: self.power = magnitude_to_power(self.magnitude)
 		return self.power
 
+	def get_brightness_coefficients_for_magnitude(self):
+		if self.max_magnitude==None:
+			max_magnitude=numpy.max(self.get_magnitude())
+		else:
+			max_magnitude = self.max_magnitude
+
+		if self.min_magnitude==None:
+			min_magnitude=numpy.min(self.get_magnitude())
+		else:
+			min_magnitude = self.min_magnitude
+		print "MINMAX",min_magnitude,max_magnitude
+		brightness_slope = - 1.0 / (max_magnitude - min_magnitude)
+		brightness_const = 1.0 * max_magnitude / (max_magnitude - min_magnitude)
+
+		return brightness_const, brightness_slope
+
+	def get_brightness_coefficients_for_power(self):
+		if self.max_power==None:
+			max_power=numpy.max(self.get_power())
+		else:
+			max_power = self.max_power
+
+		if self.min_power==None:
+			min_power=numpy.min(self.get_power())
+		else:
+			min_power = self.min_power
+
+		brightness_slope = - 1.0 / (max_power - min_power)
+		brightness_const = 1.0 * max_power/ (max_power - min_power)
+
+		return brightness_const, brightness_slope
+
 	def get_brightness(self):
 		if self.brightness==None:
 			if self.brightness_method=="from_magnitude":
-				if self.max_magnitude==None:
-					max_magnitude=numpy.max(self.get_magnitude())
-				else:
-					max_magnitude = self.max_magnitude
-
-				if self.min_magnitude==None:
-					min_magnitude=numpy.min(self.get_magnitude())
-				else:
-					min_magnitude = self.min_magnitude
-
-				brightness_slope = - 1.0 / (max_magnitude - min_magnitude)
-				brightness_const = 1.0 * max_magnitude / (max_magnitude - min_magnitude)
+				brightness_const, brightness_slope = self.get_brightness_coefficients_for_magnitude()
 
 				brightness = brightness_slope * self.get_magnitude() + brightness_const
 				self.brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
 			elif self.brightness_method=="from_power":
-				if self.max_power==None:
-					max_power=numpy.max(self.get_power())
-				else:
-					max_power = self.max_power
-
-				if self.min_power==None:
-					min_power=numpy.min(self.get_power())
-				else:
-					min_power = self.min_power
-
-				brightness_slope = - 1.0 / (max_power - min_power)
-				brightness_const = 1.0 * max_power/ (max_power - min_power)
+				brightness_const, brightness_slope = self.get_brightness_coefficients_for_power()
 
 				brightness = brightness_slope * self.get_power() + brightness_const
 				self.brightness = numpy.maximum(0.,numpy.minimum(1.,brightness))
@@ -634,9 +740,7 @@ class SpectrumData(SpectrumDataBase):
 #		u = semitone_to_frequency(upper)
 #		return self.get_points_in_frequency_range(l,u,overtones)
 
-	def analyze_overtones(self,semitone,overtones=None):
-		""" calculates power and peak center for each overtone and yields tuples (overtone, frequency, power, peak_center, difference_in_semitones) """
-
+	def get_peak_radius(self):
 		bands = len(self.frequency)
 		rate = 2.0 * bands * self.frequency[-1] / ( bands-0.5 )
 		data_length = 2*bands - 2
@@ -644,7 +748,12 @@ class SpectrumData(SpectrumDataBase):
 		# http://mathworld.wolfram.com/HammingFunction.html: position of first root of apodization function
 		peak_radius = 1.299038105676658 * rate / data_length
 
+		return peak_radius
+
+	def analyze_overtones(self,semitone,overtones=None):
+		""" calculates power and peak center for each overtone and yields tuples (overtone, frequency, power, peak_center, difference_in_semitones) """
 		frequency = semitone_to_frequency(semitone)
+		peak_radius = self.get_peak_radius()
 
 		overtone=0
 
@@ -667,24 +776,73 @@ class SpectrumData(SpectrumDataBase):
 
 			overtone += 1
 
-	def analyze_semitone(self,semitone,overtones=10):
+	def analyze_semitone(self,semitone,overtones=10, undertones=2, undertone_limit=80.):
 		""" calculate total power, inharmonicity and independence coefficients """
-#		frequency = semitone_to_frequency(semitone)
 
-		total_power = 0
-		diff_squares = 0
-		diffs = 0
+		analysis = self.analyze_overtones(semitone,overtones)
 
-		for overtone, frequency, power, peak_center, difference_in_semitones in self.analyze_overtones(semitone,overtones):
-			total_power += power
-			diff_squares += power * difference_in_semitones**2.
-			diffs += power * difference_in_semitones
+		# fundamental tone
+		overtone, fundamental_frequency, power, peak_center, difference_in_semitones = analysis.next()
+
+		fundamental_power = power
+		fundamental_diff_square = power * difference_in_semitones**2.
+		fundamental_diff = power * difference_in_semitones
+
+		# overtones
+		overtone_power = 0
+		overtone_diff_squares = 0
+		overtone_diffs = 0
+
+		for overtone, frequency, power, peak_center, difference_in_semitones in analysis:
+			overtone_power += power
+			overtone_diff_squares += power * difference_in_semitones**2.
+			overtone_diffs += power * difference_in_semitones
+
+		total_power = fundamental_power + overtone_power
+		diff_squares = fundamental_diff_square + overtone_diff_squares
+		diffs = fundamental_diff + overtone_diffs
 
 		center = diffs/total_power
 		variance = diff_squares/total_power - center**2.
 		standard_deviation = numpy.sqrt(variance)
 
-		print center, variance, standard_deviation
+		# calculate upper_dependence
+#		if fundamental_frequency<150.: fp = fundamental_power*15.	# exception for low-pitched tones
+#		else: fp = fundamental_power
+#		alien_power = max(0, overtone_power - 0.5*fp)
+		alien_power = max(0, overtone_power - 0.5*fundamental_power)
+		upper_dependence = alien_power / total_power
+		print "upperdependence of %d is %f" % (semitone, upper_dependence)
+
+		# calculate lower_dependence
+		peak_radius = self.get_peak_radius()
+
+		undertone_power = 0
+
+		for undertone in xrange(2,undertones+2):
+			undertone_frequency = fundamental_frequency / undertone
+			if undertone_frequency < undertone_limit: break
+
+			s = frequency_to_semitone(undertone_frequency)
+
+			lower_frequency = undertone_frequency - peak_radius*1.65
+			upper_frequency = undertone_frequency + peak_radius*1.65
+
+			lower_frequency = min(lower_frequency, semitone_to_frequency(s-0.5))
+			upper_frequency = max(upper_frequency, semitone_to_frequency(s+0.5))
+
+			power = self.get_power_in_frequency_range(lower_frequency,upper_frequency)
+
+			power /= undertone**2.
+
+#			if undertone_frequency>150.: power *= 15
+
+			undertone_power += power
+
+		lower_dependence = undertone_power / total_power
+		print "lowerdependence of %d is %f (%f/%f)" % (semitone, lower_dependence, undertone_power, total_power)
+
+		return fundamental_power, total_power, center, standard_deviation, upper_dependence, lower_dependence
 
 	def get_power_spline(self):
 		if not self.power_spline:
@@ -730,13 +888,22 @@ class SpectrumData(SpectrumDataBase):
 
 		#2> if one overtone has much greater power, subtract it from total power (except for low-pitched tones)
 		# [   1 + 1/4 + 1/9 + 1/16 + ... ~= 1.5 ]
-		# so overtones*.5 should have same power or less as fundamental tone
+		# 1 1/4 1/9
+		# so overtones should have same power or less as fundamental tone*.5
 		# (if fundamental frequency < 150Hz, fundamental frequency is given a bonus *= 15)
-		# if not, a overtone note is also played.
-		# find position of this overtone note (maximum?)
-		# => subtract overtone note power from total power, divide by total power
-		# => this is the percentage of power that belongs to this tone
+		# if not, an overtone note is also played.
+		## find position of this overtone note (maximum?)
+		## => subtract overtone note power from total power, divide by total power
+		## => this is the percentage of power that belongs to this tone
+		# so clip total power to fundamental_power * 1.5
+		# upper_dependence is percentage of power not belonging to fundamental tone.
+		# -> ALGORITHM:
+		#	if fundamental_frequency<150Hz: fundamental_power *= 15
+		#	alien_power = max(0, overtone_power - .5*fundamental_power)
+		#	total power = overtone_power + fundamental_power
+		#	upper_dependence = alien_power / total_power
 		#
+		#	( => upper_dependence = (overtone_power - .5*fundamental_power) / (overtone_power+fundamental_power) < 1 )
 
 		# problem: if only one overtone exists, inharmonicity is 0 but this is not necessarily a note
 
@@ -747,4 +914,4 @@ class SpectrumData(SpectrumDataBase):
 
 		return points
 
-gobject.type_register(SpectrumData)
+gobject.type_register(VisualizerControl)

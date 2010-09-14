@@ -77,10 +77,64 @@ class Transcribe:
 		self.builder.get_object("duration").set_adjustment(project.timeline.ruler.marker_duration)
 		self.builder.get_object("timelinecontainer").add(project.timeline)
 
+		project.spectrumdata.connect("add_tab_marker", self.vis_add_tab_marker)
+		project.spectrumdata.connect("plot_evolution", self.vis_plot_evolution)
+
 		self.project = project
 		self.set_autoupdate()
 
 		return True
+
+	def vis_add_tab_marker(self,viscontrol,stringid,fret):
+		if not self.project: return
+
+		playback_marker = self.project.timeline.ruler.get_playback_marker()
+		if not playback_marker: return
+
+		start,duration = playback_marker
+
+		string = self.project.timeline.tabulature.strings[stringid]
+
+		marker = Project.Timeline.TabMarker(
+			string,
+			start,
+			duration,
+			fret
+		)
+		string.markers.append(marker)
+		self.project.touch()
+
+	def vis_plot_evolution(self,viscontrol,semitone):
+		if not self.project: return
+
+		playback_marker = self.project.timeline.ruler.get_playback_marker()
+		if not playback_marker: return
+
+		import scipy.interpolate
+
+		start,duration = playback_marker
+
+		interval = 0.1
+		steps = 1.0*duration/interval
+
+		x = []
+		y = []
+		for step in xrange(int(steps)):
+			pos = start + step*interval
+			frq, power = self.project.appsinkpipeline.get_spectrum(pos,pos+interval)
+
+			spline = scipy.interpolate.InterpolatedUnivariateSpline(frq, power, None, [None, None], 1)
+
+			lower = Visualizer.semitone_to_frequency(semitone-0.5)
+			upper = Visualizer.semitone_to_frequency(semitone+0.5)
+			total = spline.integral(lower, upper)
+
+			x.append(pos)
+			y.append(total)
+
+		w = Analyze.Analyze()
+		w.show_all()
+		w.simple_plot(x,y)
 
 	# glade callbacks - file menu
 	def new_project(self,*args):
@@ -228,35 +282,35 @@ class Transcribe:
 		w.show_all()
 		w.plot_spectrum(frq, power)
 
-	def compare(self,widget):
-		if not self.project: return
-
-		marker = self.project.timeline.ruler.get_playback_marker()
-		if not marker: return
-
-		start,duration = marker
-
-		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
-
-		if self.builder.get_object("cutoff_button").get_active():
-			max_magnitude = self.builder.get_object("cutoff").get_value()
-		else:
-			max_magnitude = None
-
-		spectrum = Visualizer.SpectrumData(frq, power=power, max_magnitude=max_magnitude)
-
-		c = goocanvas.Canvas()
-		c.set_property("has-tooltip",True)
-		f = Visualizer.Fretboard2(spectrum=spectrum,parent=c.get_root_item())
-		width = f.get_width()
-		height = f.get_height()
-		c.set_bounds(0,0,width,height)
-		c.set_size_request(width,height)
-		w = gtk.Window()
-		w.set_title("Compare")
-		w.add(c)
-		w.show_all()
-
+#	def compare(self,widget):
+#		if not self.project: return
+#
+#		marker = self.project.timeline.ruler.get_playback_marker()
+#		if not marker: return
+#
+#		start,duration = marker
+#
+#		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
+#
+#		if self.builder.get_object("cutoff_button").get_active():
+#			max_magnitude = self.builder.get_object("cutoff").get_value()
+#		else:
+#			max_magnitude = None
+#
+#		spectrum = Visualizer.VisualizerControl(frq, power=power, max_magnitude=max_magnitude)
+#
+#		c = goocanvas.Canvas()
+#		c.set_property("has-tooltip",True)
+#		f = Visualizer.Fretboard2(spectrum=spectrum,parent=c.get_root_item())
+#		width = f.get_width()
+#		height = f.get_height()
+#		c.set_bounds(0,0,width,height)
+#		c.set_size_request(width,height)
+#		w = gtk.Window()
+#		w.set_title("Compare")
+#		w.add(c)
+#		w.show_all()
+#
 #		w = Visualizer.CompareWindow()
 
 	# glade callbacks - toolbar
@@ -417,7 +471,7 @@ class Transcribe:
 #			max_magnitude = None
 
 		self.project.spectrumdata.set_power(frq, power)
-#		spectrum = Visualizer.SpectrumData(frq, power=power, max_magnitude=max_magnitude)
+#		spectrum = Visualizer.VisualizerControl(frq, power=power, max_magnitude=max_magnitude)
 #
 #		for viswindow in self.visualizers:
 #			viswindow.set_spectrum(spectrum)
@@ -637,23 +691,23 @@ class Transcribe:
 			self.builder.get_object("mode_delete").set_active(True)
 
 	# spectrumlistener callback
-	def on_magnitudes(self, spectrumlistener, bands, rate, threshold, magnitudes):
-		if not self.autoupdate or not self.project: return
-
-		magnitude_max = 0.
-
-		frequencies = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
-		magnitudes = numpy.array(magnitudes)
-
-		if self.builder.get_object("cutoff_button").get_active():
-			max_magnitude = self.builder.get_object("cutoff").get_value()
-		else:
-			max_magnitude = None
-				
-		spectrum = Visualizer.SpectrumData(frequencies, magnitude=magnitudes, min_magnitude=threshold, max_magnitude=max_magnitude)
-
-		for viswindow in self.visualizers:
-			viswindow.set_spectrum(spectrum)
+#	def on_magnitudes(self, spectrumlistener, bands, rate, threshold, magnitudes):
+#		if not self.autoupdate or not self.project: return
+#
+#		magnitude_max = 0.
+#
+#		frequencies = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
+#		magnitudes = numpy.array(magnitudes)
+#
+#		if self.builder.get_object("cutoff_button").get_active():
+#			max_magnitude = self.builder.get_object("cutoff").get_value()
+#		else:
+#			max_magnitude = None
+#				
+#		spectrum = Visualizer.VisualizerControl(frequencies, magnitude=magnitudes, min_magnitude=threshold, max_magnitude=max_magnitude)
+#
+#		for viswindow in self.visualizers:
+#			viswindow.set_spectrum(spectrum)
 
 	# position marker callback
 	def update_position_marker(self,*args):
