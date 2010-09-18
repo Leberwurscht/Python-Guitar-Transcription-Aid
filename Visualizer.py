@@ -54,47 +54,56 @@ def semitone_to_frequency(semitone):
 
 # problem: if x or y is changed, will update be called?
 class Semitone(goocanvas.ItemSimple, goocanvas.Item):
-	__gproperties__ = {
-		'x': (gobject.TYPE_DOUBLE,'X','x coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
-		'y': (gobject.TYPE_DOUBLE,'Y','y coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
-		'width': (gobject.TYPE_DOUBLE,'Width','Width',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,30,gobject.PARAM_READWRITE),
-		'height': (gobject.TYPE_DOUBLE,'Height','Height',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,20,gobject.PARAM_READWRITE)
-	}
+#	__gproperties__ = {
+#		'x': (gobject.TYPE_DOUBLE,'X','x coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
+#		'y': (gobject.TYPE_DOUBLE,'Y','y coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
+#		'width': (gobject.TYPE_DOUBLE,'Width','Width',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,30,gobject.PARAM_READWRITE),
+#		'height': (gobject.TYPE_DOUBLE,'Height','Height',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,20,gobject.PARAM_READWRITE)
+#	}
+	x = gobject.property(type=gobject.TYPE_DOUBLE)
+	y = gobject.property(type=gobject.TYPE_DOUBLE)
+	width = gobject.property(type=gobject.TYPE_DOUBLE, default=30)
+	height = gobject.property(type=gobject.TYPE_DOUBLE, default=20)
 
-	__gsignals__ = {
-		'right-clicked': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,))
-	}
+	semitone = gobject.property(type=gobject.TYPE_DOUBLE, default=0)
 
-	def __init__(self, spectrum, semitone, volume, method="gradient", **kwargs):
-		kwargs["tooltip"] = note_name(semitone)+" ("+str(semitone)+") ["+str(semitone_to_frequency(semitone))+" Hz]"
+#	__gsignals__ = {
+#		'right-clicked': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,))
+#	}
 
+	def __init__(self, spectrum, method="gradient", **kwargs):
 		goocanvas.ItemSimple.__init__(self,**kwargs)
+
+		if not self.props.tooltip:
+			self.props.tooltip = note_name(self.semitone)+" ("+str(self.semitone)+") ["+str(semitone_to_frequency(self.semitone))+" Hz]"
 
 		self.method = method
 
-		self.x = self.props.x
-		self.y = self.props.y
-		self.width = self.props.width
-		self.height = self.props.height
+#		self.x = self.props.x
+#		self.y = self.props.y
+#		self.width = self.props.width
+#		self.height = self.props.height
+
+#		self.semitone = semitone
 
 		self.spectrum = spectrum
-		self.semitone = semitone
-		self.connect("button_press_event", self.press)
-		self.connect("button_release_event", self.release)
-
-		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
-		self.volume = volume
+		self.spectrum.connect("new_data", self.new_data)
+#		self.connect("button_press_event", self.press)
+#		self.connect("button_release_event", self.release)
+#
+#		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
+#		self.volume = volume
 		self.matrix = None
 
 	# custom properties
-	def do_get_property(self,pspec):
-		if hasattr(self, pspec.name):
-			return getattr(self, pspec.name)
-		else:
-			return pspec.default_value
-
-	def do_set_property(self,pspec,value):
-		setattr(self, pspec.name, value)
+#	def do_get_property(self,pspec):
+#		if hasattr(self, pspec.name):
+#			return getattr(self, pspec.name)
+#		else:
+#			return pspec.default_value
+#
+#	def do_set_property(self,pspec,value):
+#		setattr(self, pspec.name, value)
 
 	# override ItemSimple
 	def do_simple_paint(self, cr, bounds):
@@ -164,18 +173,22 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 		return True
 
 	# callbacks
-	def press(self,item,target,event):
-		if event.button==1:
-			self.pipeline.get_by_name("volume").set_property("volume", self.volume.get_value())
-			self.pipeline.get_by_name("src").set_property("freq", semitone_to_frequency(self.semitone))
-			self.pipeline.set_state(gst.STATE_PLAYING)
-		elif event.button==3:
-			self.emit('right-clicked', event)
+	def new_data(self, spectrum):
+		self.changed(False)
 
-	def release(self,item,target,event):
-		self.pipeline.set_state(gst.STATE_NULL)
+#	# callbacks
+#	def press(self,item,target,event):
+#		if event.button==1:
+#			self.pipeline.get_by_name("volume").set_property("volume", self.volume.get_value())
+#			self.pipeline.get_by_name("src").set_property("freq", semitone_to_frequency(self.semitone))
+#			self.pipeline.set_state(gst.STATE_PLAYING)
+#		elif event.button==3:
+#			self.emit('right-clicked', event)
+#
+#	def release(self,item,target,event):
+#		self.pipeline.set_state(gst.STATE_NULL)
 
-gobject.type_register(Semitone)
+#gobject.type_register(Semitone)
 
 class FretboardBase(goocanvas.Group):
 	def __init__(self, spectrum, volume, **kwargs):
@@ -234,6 +247,8 @@ class FretboardBase(goocanvas.Group):
 
 		goocanvas.Group.__init__(self,**kwargs)
 
+		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
+
 		self.construct(self.paddingx, self.paddingy)
 
 	def construct(self, posx, posy):
@@ -244,9 +259,10 @@ class FretboardBase(goocanvas.Group):
 			for fret in xrange(self.frets+1):
 				x = posx + fret*self.rectwidth
 				y = posy + self.rectheight*string
-				rect = Semitone(self.spectrum, semitone+fret, self.volume, parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-				rect.connect("right_clicked", self.open_context_menu, string, fret)
-				self.spectrum.connect("new_data", self.redraw_semitone, rect)
+				rect = Semitone(self.spectrum, semitone=semitone+fret, method=self.method, parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#				rect.connect("right_clicked", self.open_context_menu, string, fret)
+				rect.connect("button_press_event", self.press_semitone, string, fret)
+				rect.connect("button_release_event", self.release_semitone)
 
 		y = posy + self.rectheight*(len(self.strings) + 0.5)
 		for fret in self.markers:
@@ -276,6 +292,18 @@ class FretboardBase(goocanvas.Group):
 		return self.get_bounds().y2 - self.get_bounds().y1 + 2*self.paddingy
 
 	# callbacks
+	def press_semitone(self,semitone,target,event,string,fret):
+		if event.button==1:
+			self.pipeline.get_by_name("volume").set_property("volume", self.volume.get_value())
+			self.pipeline.get_by_name("src").set_property("freq", semitone_to_frequency(semitone.semitone))
+			self.pipeline.set_state(gst.STATE_PLAYING)
+		elif event.button==3:
+			self.open_context_menu(semitone,event,string,fret)
+#			self.emit('right-clicked', event)
+
+	def release_semitone(self,item,target,event):
+		self.pipeline.set_state(gst.STATE_NULL)
+
 	def redraw_semitone(self, spectrum, semitone):
 		semitone.changed(False)
 
@@ -403,6 +431,10 @@ class SingleString(FretboardBase):
 			semitone = self.tuning + 12.*numpy.log2(multiplicator)
 			kwargs["strings"].append(semitone)
 
+		if "method" in kwargs:
+			if not kwargs["method"] in ["gradient","cumulate"]:
+				raise ValueError, "invalid method for SingleString"
+
 		FretboardBase.__init__(self, spectrum, volume, **kwargs)
 
 	def construct(self, posx, posy):
@@ -433,37 +465,37 @@ class SingleString(FretboardBase):
 		y = self.get_bounds().y2 + 10
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, self.tuning+fret, self.volume, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
+#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
 
 	# callbacks
 	def open_context_menu(self, rect, event, string, fret):
@@ -540,6 +572,17 @@ class FretboardWindow(FretboardWindowBase):
 
 		self.adjust_canvas_size()
 
+		hbox = gtk.HBox()
+		self.controls.add(hbox)
+
+		label = gtk.Label("Method")
+		hbox.add(label)
+
+		combobox = gtk.combo_box_new_text()
+#		string = self.project.timeline.tabulature.strings[i]
+#		combobox.append_text(str(i+1)+" ("+str(string.tuning)+")")
+		combobox.set_active(0)
+
 class SingleStringWindow(FretboardWindowBase):
 	def __init__(self, spectrum, tuning=-5, **kwargs):
 		FretboardWindowBase.__init__(self, **kwargs)
@@ -552,6 +595,7 @@ class SingleStringWindow(FretboardWindowBase):
 		self.adjust_canvas_size()
 
 class VisualizerControl(VisualizerControlBase):
+#	autoupdate = gobject.property(type=gobject.TYPE_BOOLEAN, default=False)
 	__gproperties__ = {
 		'autoupdate': (gobject.TYPE_BOOLEAN,'AutoUpdate','Whether to update visualizers while playback',False,gobject.PARAM_READWRITE)
 	}
@@ -670,7 +714,7 @@ class VisualizerControl(VisualizerControlBase):
 			min_magnitude=numpy.min(self.get_magnitude())
 		else:
 			min_magnitude = self.min_magnitude
-		print "MINMAX",min_magnitude,max_magnitude
+#		print "MINMAX",min_magnitude,max_magnitude
 		brightness_slope = - 1.0 / (max_magnitude - min_magnitude)
 		brightness_const = 1.0 * max_magnitude / (max_magnitude - min_magnitude)
 
