@@ -3,7 +3,7 @@
 import gtk, numpy, cairo, goocanvas, gobject
 import gst
 import scipy.interpolate
-from SpectrumData import base as VisualizerControlBase
+from VisualizerControlBase import base as VisualizerControlBase
 
 REFERENCE_FREQUENCY = 440
 standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}

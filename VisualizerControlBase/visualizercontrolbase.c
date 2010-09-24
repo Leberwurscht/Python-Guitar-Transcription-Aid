@@ -6,7 +6,7 @@
 // http://faq.pygtk.org/index.py?req=show&file=faq23.015.htp
 // http://cgit.freedesktop.org/gstreamer/gst-plugins-good/tree/tests/examples/spectrum/demo-osssrc.c
 
-// for subclassing, will be set by initSpectrumData
+// for subclassing, will be set by initVisualizerControlBase
 static PyTypeObject *PyGObject_Type=NULL;
 
 // "base" class
@@ -20,7 +20,7 @@ typedef struct {
 static PyTypeObject baseType = {
 	PyObject_HEAD_INIT(NULL)
 	0,
-	"SpectrumData.base",
+	"VisualizerControlBase.base",
 	sizeof(base)
 };
 
@@ -166,7 +166,7 @@ static int base_init(base *self, PyObject *args, PyObject *kwds)
 	return 0;
 }
 
-PyMODINIT_FUNC initSpectrumData(void)
+PyMODINIT_FUNC initVisualizerControlBase(void)
 {
 	init_pygobject();
 
@@ -181,7 +181,7 @@ PyMODINIT_FUNC initSpectrumData(void)
 	baseType.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
 	baseType.tp_init = (initproc)base_init;
 	baseType.tp_members = base_members;
-	baseType.tp_doc = "SpectrumData base class";
+	baseType.tp_doc = "VisualizerControlBase base class";
 
 	if (PyType_Ready(&baseType)<0) return;
 
@@ -220,8 +220,8 @@ PyMODINIT_FUNC initSpectrumData(void)
 	// don't need gobject_module anymore
 	Py_DECREF(gobject_module);
 
-	// add "base" class to "SpectrumData" module
-	PyObject *module = Py_InitModule3("SpectrumData", NULL, "Module containing SpectrumData base class");
+	// add "base" class to "VisualizerControlBase" module
+	PyObject *module = Py_InitModule3("VisualizerControlBase", NULL, "Module containing VisualizerControlBase base class");
 	Py_INCREF(&baseType);
 	PyModule_AddObject(module, "base", (PyObject*)&baseType);
 }

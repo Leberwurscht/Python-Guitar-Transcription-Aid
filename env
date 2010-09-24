@@ -1,2 +1,2 @@
 #!/bin/bash
-PYTHONPATH=$PYTHONPATH:SpectrumData/build/lib.linux-x86_64-2.6 /bin/bash
+PYTHONPATH=$PYTHONPATH:VisualizerControlBase/build/lib.linux-x86_64-2.6 /bin/bash

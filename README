@@ -1,0 +1,21 @@
+Python-Guitar-Transcription-Aid
+===============================
+
+This is a python program that helps transcribing guitar music by drawing spectrum onto a fretboard. It is currently in a very early development state.
+
+Requirements (Ubuntu):
+python
+python-matplotlib
+python-gtk2
+python-pygoocanvas
+python-gst0.10
+python-gst0.10-dev
+gstreamer0.10-plugins-bad
+build-essentials
+python-gobject
+python-scipy
+python-cairo
+
+Building:
+cd SpectrumVisualizerBase
+python setup.py build
