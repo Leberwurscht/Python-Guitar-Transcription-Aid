@@ -1,4 +1,5 @@
-VisualizerControlBase/build/*
+VisualizerControlBase/build/
 *.swp
 *.pyc
 *.pyo
+*.so
