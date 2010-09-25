@@ -54,12 +54,6 @@ def semitone_to_frequency(semitone):
 
 # problem: if x or y is changed, will update be called?
 class Semitone(goocanvas.ItemSimple, goocanvas.Item):
-#	__gproperties__ = {
-#		'x': (gobject.TYPE_DOUBLE,'X','x coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
-#		'y': (gobject.TYPE_DOUBLE,'Y','y coordinate',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,0,gobject.PARAM_READWRITE),
-#		'width': (gobject.TYPE_DOUBLE,'Width','Width',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,30,gobject.PARAM_READWRITE),
-#		'height': (gobject.TYPE_DOUBLE,'Height','Height',-gobject.G_MAXDOUBLE,gobject.G_MAXDOUBLE,20,gobject.PARAM_READWRITE)
-#	}
 	x = gobject.property(type=gobject.TYPE_DOUBLE)
 	y = gobject.property(type=gobject.TYPE_DOUBLE)
 	width = gobject.property(type=gobject.TYPE_DOUBLE, default=30)
@@ -67,11 +61,7 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 
 	semitone = gobject.property(type=gobject.TYPE_DOUBLE, default=0)
 
-#	__gsignals__ = {
-#		'right-clicked': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_PYOBJECT,))
-#	}
-
-	def __init__(self, spectrum, method="gradient", **kwargs):
+	def __init__(self, control, method="gradient", **kwargs):
 		goocanvas.ItemSimple.__init__(self,**kwargs)
 
 		if not self.props.tooltip:
@@ -79,71 +69,50 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 
 		self.method = method
 
-#		self.x = self.props.x
-#		self.y = self.props.y
-#		self.width = self.props.width
-#		self.height = self.props.height
+		self.control = control
+		self.control.connect("new_data", self.new_data)
 
-#		self.semitone = semitone
-
-		self.spectrum = spectrum
-		self.spectrum.connect("new_data", self.new_data)
-#		self.connect("button_press_event", self.press)
-#		self.connect("button_release_event", self.release)
-#
-#		self.pipeline = gst.parse_launch("audiotestsrc name=src wave=saw ! volume name=volume ! gconfaudiosink")
-#		self.volume = volume
 		self.matrix = None
-
-	# custom properties
-#	def do_get_property(self,pspec):
-#		if hasattr(self, pspec.name):
-#			return getattr(self, pspec.name)
-#		else:
-#			return pspec.default_value
-#
-#	def do_set_property(self,pspec,value):
-#		setattr(self, pspec.name, value)
 
 	# override ItemSimple
 	def do_simple_paint(self, cr, bounds):
 		cr.translate(self.x, self.y)
 		cr.rectangle(0.0, 0.0, self.width, self.height)
 
-		if not self.spectrum.has_data:
+		if not self.control.has_data:
 			cr.set_source_rgb(1.,1.,1.)
 		elif self.method=="cumulate":
-			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.control.analyze_semitone(self.semitone)
 			magnitude = power_to_magnitude(power / 1.5 / 1000)
-			const,slope = self.spectrum.get_brightness_coefficients_for_magnitude()
+			const,slope = self.control.get_brightness_coefficients_for_magnitude()
 			brightness = slope*magnitude + const
 			print self.semitone,"mag",magnitude,"tpow",power,"b",brightness,"pow",fpower
 			cr.set_source_rgb(brightness,brightness,brightness)
 		elif self.method=="test":
-			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.control.analyze_semitone(self.semitone)
 			upper_dependence = min(1.,upper_dependence)
 			lower_dependence = min(1.,lower_dependence)
 			total_dependence = min(1., upper_dependence+lower_dependence)
 			power *= 1. - total_dependence
 			magnitude = power_to_magnitude(power / 1.5 / 1000)
-			const,slope = self.spectrum.get_brightness_coefficients_for_magnitude()
+			const,slope = self.control.get_brightness_coefficients_for_magnitude()
 			brightness = slope*magnitude + const
 			cr.set_source_rgb(brightness,brightness,brightness)
 		elif self.method=="inharmonicity":
-			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.control.analyze_semitone(self.semitone)
 			brightness = standard_deviation / 0.5
 			cr.set_source_rgb(brightness,brightness,brightness)
 		elif self.method=="lower_dependence":
-			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.control.analyze_semitone(self.semitone)
 			brightness = lower_dependence
 			cr.set_source_rgb(brightness,brightness,brightness)
 		elif self.method=="upper_dependence":
-			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.spectrum.analyze_semitone(self.semitone)
+			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.control.analyze_semitone(self.semitone)
 			brightness = upper_dependence
 			cr.set_source_rgb(brightness,brightness,brightness)
 		elif self.method=="gradient":
 			assert not self.matrix==None
-			gradient = self.spectrum.get_gradient()
+			gradient = self.control.get_gradient()
 			gradient.set_matrix(self.matrix)
 			cr.set_source(gradient)
 		else:
@@ -173,27 +142,13 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 		return True
 
 	# callbacks
-	def new_data(self, spectrum):
+	def new_data(self, control):
 		self.changed(False)
 
-#	# callbacks
-#	def press(self,item,target,event):
-#		if event.button==1:
-#			self.pipeline.get_by_name("volume").set_property("volume", self.volume.get_value())
-#			self.pipeline.get_by_name("src").set_property("freq", semitone_to_frequency(self.semitone))
-#			self.pipeline.set_state(gst.STATE_PLAYING)
-#		elif event.button==3:
-#			self.emit('right-clicked', event)
-#
-#	def release(self,item,target,event):
-#		self.pipeline.set_state(gst.STATE_NULL)
-
-#gobject.type_register(Semitone)
-
 class FretboardBase(goocanvas.Group):
-	def __init__(self, spectrum, volume, **kwargs):
+	def __init__(self, control, volume, **kwargs):
 		self.volume = volume
-		self.spectrum = spectrum
+		self.control = control
 
 		if "strings" in kwargs:
 			self.strings = kwargs["strings"]
@@ -259,8 +214,10 @@ class FretboardBase(goocanvas.Group):
 			for fret in xrange(self.frets+1):
 				x = posx + fret*self.rectwidth
 				y = posy + self.rectheight*string
-				rect = Semitone(self.spectrum, semitone=semitone+fret, method=self.method, parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-#				rect.connect("right_clicked", self.open_context_menu, string, fret)
+
+				rect = Semitone(self.control, semitone=semitone+fret, method=self.method,
+					parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+
 				rect.connect("button_press_event", self.press_semitone, string, fret)
 				rect.connect("button_release_event", self.release_semitone)
 
@@ -299,23 +256,19 @@ class FretboardBase(goocanvas.Group):
 			self.pipeline.set_state(gst.STATE_PLAYING)
 		elif event.button==3:
 			self.open_context_menu(semitone,event,string,fret)
-#			self.emit('right-clicked', event)
 
 	def release_semitone(self,item,target,event):
 		self.pipeline.set_state(gst.STATE_NULL)
-
-	def redraw_semitone(self, spectrum, semitone):
-		semitone.changed(False)
 
 	def open_context_menu(self, rect, event, string, fret):
 		raise NotImplementedError, "override this method!"
 
 	def analyze_semitone(self,item,target,event,semitone):
-		if not self.spectrum.has_data: return
+		if not self.control.has_data: return
 
 		text = ""
 
-		for overtone, frequency, power, peak_center, difference_in_semitones in self.spectrum.analyze_overtones(semitone, 10):
+		for overtone, frequency, power, peak_center, difference_in_semitones in self.control.analyze_overtones(semitone, 10):
 			s = frequency_to_semitone(frequency)
 			near = int(round(s))
 			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, note_name(near))
@@ -338,10 +291,10 @@ class FretboardBase(goocanvas.Group):
 		w.show_all()
 
 	def add_tab_marker(self, item, target, event, string, fret):
-		self.spectrum.emit("add-tab-marker", string, fret)
+		self.control.emit("add-tab-marker", string, fret)
 
 	def plot_evolution(self, item, target, event, semitone):
-		self.spectrum.emit("plot-evolution", semitone)
+		self.control.emit("plot-evolution", semitone)
 
 	# custom properties
 	def do_get_property(self,pspec):
@@ -351,8 +304,8 @@ class FretboardBase(goocanvas.Group):
 		setattr(self, pspec.name, value)
 
 class Fretboard(FretboardBase):
-	def __init__(self, spectrum, volume, **kwargs):
-		FretboardBase.__init__(self, spectrum, volume, **kwargs)
+	def __init__(self, control, volume, **kwargs):
+		FretboardBase.__init__(self, control, volume, **kwargs)
 
 	def construct(self, posx, posy):
 		# captions
@@ -397,23 +350,16 @@ class Fretboard(FretboardBase):
 		item = gtk.MenuItem("Add to tabulature")
 		item.connect("activate", self.add_tab_marker, item, None, string, fret)
 		menu.append(item)
-#		this needs to be received by transcribe
-#		if singlestring gets this, transcribe should also receive that
-#		=> need one common object like spectrumdata that all visualizers share,
-#			perhaps SpectrumData itself, rename it to VisualizerControl
 
 		menu.show_all()
 		menu.popup(None, None, None, event.button, event.time)
 
 	def open_string(self, item, target, event, string):
-		w = SingleStringWindow(self.spectrum, self.strings[string])
+		w = SingleStringWindow(self.control, self.strings[string])
 		w.show_all()
 
-#	def plot(self, item, target, event, semitone):
-#		self
-
 class SingleString(FretboardBase):
-	def __init__(self, spectrum, volume, **kwargs):
+	def __init__(self, control, volume, **kwargs):
 		if "tuning" in kwargs:
 			self.tuning = kwargs["tuning"]
 			del kwargs["tuning"]
@@ -435,7 +381,7 @@ class SingleString(FretboardBase):
 			if not kwargs["method"] in ["gradient","cumulate"]:
 				raise ValueError, "invalid method for SingleString"
 
-		FretboardBase.__init__(self, spectrum, volume, **kwargs)
+		FretboardBase.__init__(self, control, volume, **kwargs)
 
 	def construct(self, posx, posy):
 		# captions
@@ -465,37 +411,27 @@ class SingleString(FretboardBase):
 		y = self.get_bounds().y2 + 10
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.control, semitone=self.tuning+fret, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.control, semitone=self.tuning+fret, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.control, semitone=self.tuning+fret, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.control, semitone=self.tuning+fret, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
 
 		y += self.rectheight
 		for fret in xrange(0,self.frets+1):
 			x = startx + self.rectwidth*fret
-			rect = Semitone(self.spectrum, semitone=self.tuning+fret, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-#			rect.connect("right_clicked", self.open_context_menu, 0, fret)
-#			self.spectrum.connect("new_data", self.redraw_semitone, rect)
+			rect = Semitone(self.control, semitone=self.tuning+fret, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
 
 	# callbacks
 	def open_context_menu(self, rect, event, string, fret):
@@ -506,10 +442,6 @@ class SingleString(FretboardBase):
 		item = gtk.MenuItem("Analyze")
 		item.connect("activate", self.analyze_semitone, item, None, self.tuning+fret)
 		menu.append(item)
-
-#		item = gtk.MenuItem("Add to tabulature")
-#		item.connect("activate", self.)
-#		menu.append(item)
 
 		item = gtk.MenuItem("Plot")
 		item.connect("activate", self.plot_evolution, item, None, self.strings[string]+fret)
@@ -558,17 +490,14 @@ class FretboardWindowBase(gtk.Window):
 		color = from_widget.get_style().bg[gtk.STATE_NORMAL]
 		to_widget.set_property("background_color", color)
 
-#	def set_spectrum(self, spectrum):
-#		self.visualizer.spectrum = spectrum
-
 class FretboardWindow(FretboardWindowBase):
-	def __init__(self, spectrum, **kwargs):
+	def __init__(self, control, **kwargs):
 		FretboardWindowBase.__init__(self, **kwargs)
 
 		self.set_title("Fretboard")
 
 		root = self.canvas.get_root_item()
-		self.visualizer = Fretboard(spectrum, self.volume, parent=root)
+		self.visualizer = Fretboard(control, self.volume, parent=root)
 
 		self.adjust_canvas_size()
 
@@ -584,13 +513,13 @@ class FretboardWindow(FretboardWindowBase):
 		combobox.set_active(0)
 
 class SingleStringWindow(FretboardWindowBase):
-	def __init__(self, spectrum, tuning=-5, **kwargs):
+	def __init__(self, control, tuning=-5, **kwargs):
 		FretboardWindowBase.__init__(self, **kwargs)
 
 		self.set_title("SingleString "+note_name(tuning)+" ("+str(tuning)+")")
 
 		root = self.canvas.get_root_item()
-		self.visualizer = SingleString(spectrum, self.volume, parent=root, tuning=tuning)
+		self.visualizer = SingleString(control, self.volume, parent=root, tuning=tuning)
 
 		self.adjust_canvas_size()
 
@@ -714,7 +643,7 @@ class VisualizerControl(VisualizerControlBase):
 			min_magnitude=numpy.min(self.get_magnitude())
 		else:
 			min_magnitude = self.min_magnitude
-#		print "MINMAX",min_magnitude,max_magnitude
+
 		brightness_slope = - 1.0 / (max_magnitude - min_magnitude)
 		brightness_const = 1.0 * max_magnitude / (max_magnitude - min_magnitude)
 

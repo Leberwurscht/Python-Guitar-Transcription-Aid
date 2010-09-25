@@ -92,8 +92,8 @@ class Transcribe:
 		self.builder.get_object("duration").set_adjustment(project.timeline.ruler.marker_duration)
 		self.builder.get_object("timelinecontainer").add(project.timeline)
 
-		project.spectrumdata.connect("add_tab_marker", self.vis_add_tab_marker)
-		project.spectrumdata.connect("plot_evolution", self.vis_plot_evolution)
+		project.control.connect("add_tab_marker", self.vis_add_tab_marker)
+		project.control.connect("plot_evolution", self.vis_plot_evolution)
 
 		self.project = project
 		self.set_autoupdate()
@@ -253,7 +253,7 @@ class Transcribe:
 	def open_fretboard(self,widget):
 		if not self.project: return
 
-		w = Visualizer.FretboardWindow(self.project.spectrumdata)
+		w = Visualizer.FretboardWindow(self.project.control)
 		w.show_all()
 
 #		self.visualizers.append(w)
@@ -466,7 +466,7 @@ class Transcribe:
 	def set_autoupdate(self, *args):
 		if not self.project: return
 
-		self.project.spectrumdata.props.autoupdate = self.builder.get_object("autoupdate").get_active()
+		self.project.control.props.autoupdate = self.builder.get_object("autoupdate").get_active()
 #		if widget.get_active(): self.autoupdate = True
 #		else: self.autoupdate = False		
 
@@ -485,7 +485,7 @@ class Transcribe:
 #		else:
 #			max_magnitude = None
 
-		self.project.spectrumdata.set_power(frq, power)
+		self.project.control.set_power(frq, power)
 #		spectrum = Visualizer.VisualizerControl(frq, power=power, max_magnitude=max_magnitude)
 #
 #		for viswindow in self.visualizers:

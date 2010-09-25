@@ -75,7 +75,7 @@ class Project:
 		self.timeline = Timeline.Timeline(self, strings)
 		self.timeline.show_all()
 #		self.spectrumlistener = spectrumvisualizer.base(self.pipeline.spectrum, self.pipeline)
-		self.spectrumdata = Visualizer.VisualizerControl(self.pipeline)
+		self.control = Visualizer.VisualizerControl(self.pipeline)
 
 	def save(self):
 		f = open(self.filename, "w")
@@ -122,4 +122,4 @@ class Project:
 		del self.appsinkpipeline
 		del self.pipeline
 		del self.timeline
-		del self.spectrumdata
+		del self.control
