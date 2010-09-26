@@ -296,6 +296,9 @@ class FretboardBase(goocanvas.Group):
 	def plot_evolution(self, item, target, event, semitone):
 		self.control.emit("plot-evolution", semitone)
 
+	def find_onset(self, item, target, event, semitone):
+		self.control.emit("find-onset", semitone)
+
 	# custom properties
 	def do_get_property(self,pspec):
 		return getattr(self, pspec.name)
@@ -345,6 +348,10 @@ class Fretboard(FretboardBase):
 
 		item = gtk.MenuItem("Plot")
 		item.connect("activate", self.plot_evolution, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Find onset")
+		item.connect("activate", self.find_onset, item, None, self.strings[string]+fret)
 		menu.append(item)
 
 		item = gtk.MenuItem("Add to tabulature")
@@ -447,6 +454,10 @@ class SingleString(FretboardBase):
 		item.connect("activate", self.plot_evolution, item, None, self.strings[string]+fret)
 		menu.append(item)
 
+		item = gtk.MenuItem("Find onset")
+		item.connect("activate", self.find_onset, item, None, self.strings[string]+fret)
+		menu.append(item)
+
 #		item = gtk.MenuItem("Add to tabulature")
 #		item.connect("activate", self.add_tab_marker, item, None, string, fret)
 #		menu.append(item)
@@ -524,7 +535,6 @@ class SingleStringWindow(FretboardWindowBase):
 		self.adjust_canvas_size()
 
 class VisualizerControl(VisualizerControlBase):
-#	autoupdate = gobject.property(type=gobject.TYPE_BOOLEAN, default=False)
 	__gproperties__ = {
 		'autoupdate': (gobject.TYPE_BOOLEAN,'AutoUpdate','Whether to update visualizers while playback',False,gobject.PARAM_READWRITE)
 	}
@@ -532,7 +542,8 @@ class VisualizerControl(VisualizerControlBase):
 	__gsignals__ = {
 		'new-data': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
 		'add-tab-marker': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT, gobject.TYPE_INT)),
-		'plot-evolution': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,))
+		'plot-evolution': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,)),
+		'find-onset': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,))
 	}
 
 	""" holds data for visualizers, calculates and caches different scales """

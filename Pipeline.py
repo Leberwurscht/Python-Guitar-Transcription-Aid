@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import gst, gobject, array, numpy
+import scipy.interpolate
 
 MAX_FFT_SAMPLES = 8192
 
@@ -48,15 +49,8 @@ class AppSinkPipeline(gst.Pipeline):
 		resample.link(capsfilter)
 
 		# sink
-#		self.sink = gst.element_factory_make("gconfaudiosink")
 		self.sink = gst.element_factory_make("appsink")
 		self.sink.set_property("sync", False)
-#		self.sink.set_property("emit-signals", True)
-#		self.sink.connect("new-buffer", self.new_buffer)
-#		self.sink.connect("eos", self.eos)
-#		bus = self.get_bus()
-#		bus.add_signal_watch()
-#		bus.connect("message::eos", self.eos)
 		self.add(self.sink)
 		capsfilter.link(self.sink)
 
@@ -66,13 +60,6 @@ class AppSinkPipeline(gst.Pipeline):
 
 	def set_file(self, filename):
 		self.filesrc.set_property("location",filename)
-
-#	def new_buffer(*args):
-#		print args
-#
-#	def eos(*args):
-#		self.finished = True
-#		self.mainloop.quit()
 
 	def get_data(self,start,stop):
 		#print start, stop
@@ -90,15 +77,12 @@ class AppSinkPipeline(gst.Pipeline):
 
 		while True:
 			try:
-#				print "PULL"
 				b = self.sink.emit('pull-buffer')
 				if not b: break
-#				print "PULLED",len(b)
-#				print b.get_caps()
+
 				buf = buf.merge(b)
 			except Exception,e: print "Error",e
 
-#		print "DONE",len(buf)
 		r = array.array("f", str(buf))
 
 		self.set_state(gst.STATE_PAUSED)
@@ -131,34 +115,55 @@ class AppSinkPipeline(gst.Pipeline):
 
 		return frq, power
 
-#	def get_raw(self,start,stop):
-#		print start, stop
-#		self.set_state(gst.STATE_PAUSED)
-#		self.get_state()
-#
-#		self.seek(1.0,gst.FORMAT_TIME,gst.SEEK_FLAG_FLUSH,gst.SEEK_TYPE_SET,start*gst.SECOND,gst.SEEK_TYPE_SET,stop*gst.SECOND)
-#		self.get_state()
-#
-#		self.finished = False
-#		self.set_state(gst.STATE_PLAYING)
-#		self.get_state()
-#
-#		print "1"
-#		if not self.finished: self.mainloop.run()
-#		print "2"
-#
-#		while True:
-##			try:
-##				buf = self.sink.emit('pull-buffer')
-##			except SystemError, e:
-##				# it's probably a bug that emits triggers a SystemError
-##				print 'SystemError', e
-##				break
-##
-##			print buf
-#
-#		self.set_state(gst.STATE_PAUSED)
-#		self.get_state()
+	def find_onset(self, lower, upper, start, rising=1.7, interval=0.1, divisor=2, runs=3):
+		""" Find onset of a note by searching backwards from 'start' positon. 'lower' and 'upper' declares the frequency range that is
+		    considered. 'rising' declares how strong the power has to increase for an onset. For FFT, chunks of duration 'interval'
+		    are used. 'divisor' specifies a divisor to divide 'interval' by, yielding the temporal delta used to go backwards. 'runs'
+		    is how many refinement runs should be performed. """
+		# go backwards
+		# if power is lower than max(last 2*divisor powers)/rising then we know that onset is in range [current time, current time + 2*interval]
+		# now delta /= 2., find "highest rising" within that interval, that means:
+		# ...?
+
+		delta = 1.0*interval/divisor
+		interval_radius = interval/2.
+		power_memory = 2*divisor
+
+		last_powers = []
+		position = start
+
+		while True:
+			frq, power = self.get_spectrum(position - interval_radius, position + interval_radius)
+
+			spline = scipy.interpolate.InterpolatedUnivariateSpline(frq, power, None, [None, None], 1)
+			power = spline.integral(lower, upper)
+
+			if len(last_powers)==power_memory: del last_powers[0]
+			last_powers.append(power)
+
+			assert len(last_powers)>0
+			assert len(last_powers)<=power_memory
+
+			print position, last_powers
+
+			if power <= max(last_powers)/rising:
+				# onset found
+				break
+
+			# search backwards
+			position -= delta
+
+		print "found at",position
+
+		min_position = position
+		max_position = position + 2.*interval
+
+		print min_position, max_position
+
+		if not runs==0:
+			raise NotImplementedError
+
+		return min_position
 
 class Pipeline(gst.Pipeline):
 	def __init__(self,filename=None, bands=4096):

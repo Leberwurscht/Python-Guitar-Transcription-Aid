@@ -1,7 +1,7 @@
-Python-Guitar-Transcription-Aid
+Python Guitar Transcription Aid
 ===============================
 
-This is a python program that helps transcribing guitar music by drawing the spectrum onto a fretboard. It is currently in a very early development state.
+This is a python program that helps transcribing guitar music by drawing the spectrum onto a fretboard. It currently is in a very early development state.
 
 Requirements (Ubuntu)
 ---------------------

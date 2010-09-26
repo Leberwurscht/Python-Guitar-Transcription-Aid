@@ -94,6 +94,7 @@ class Transcribe:
 
 		project.control.connect("add_tab_marker", self.vis_add_tab_marker)
 		project.control.connect("plot_evolution", self.vis_plot_evolution)
+		project.control.connect("find_onset", self.find_onset)
 
 		self.project = project
 		self.set_autoupdate()
@@ -129,14 +130,27 @@ class Transcribe:
 
 		start,duration = playback_marker
 
-		interval = 0.1
-		steps = 1.0*duration/interval
+		##########
+		dialog = gtk.Dialog(title="interval", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+		entry = gtk.Entry()
+		entry.set_text("0.1")
+		dialog.vbox.add(entry)
+		dialog.show_all()
+		dialog.run()
+		interval=float(entry.get_text())
+		dialog.destroy()
+		#############
+
+#		interval = 0.1
+		delta = interval/2.
+		steps = 1.0*duration/delta
 
 		x = []
 		y = []
 		for step in xrange(int(steps)):
-			pos = start + step*interval
-			frq, power = self.project.appsinkpipeline.get_spectrum(pos,pos+interval)
+			pos = start + step*delta
+			frq, power = self.project.appsinkpipeline.get_spectrum(pos-interval/2.,pos+interval/2.)
+#			frq, power = self.project.appsinkpipeline.get_spectrum(pos,pos+interval)
 
 			spline = scipy.interpolate.InterpolatedUnivariateSpline(frq, power, None, [None, None], 1)
 
@@ -150,6 +164,23 @@ class Transcribe:
 		w = Analyze.Analyze()
 		w.show_all()
 		w.simple_plot(x,y)
+
+	def find_onset(self,viscontrol,semitone):
+		if not self.project: return
+
+		playback_marker = self.project.timeline.ruler.get_playback_marker()
+		if not playback_marker: return
+
+		start,duration = playback_marker
+
+		position = start + duration/2.
+
+		lower = Visualizer.semitone_to_frequency(semitone-0.5)
+		upper = Visualizer.semitone_to_frequency(semitone+0.5)
+
+		onset = self.project.appsinkpipeline.find_onset(lower, upper, position, runs=0)
+
+		self.project.timeline.ruler.set_playback_marker(onset, start+duration-onset)
 
 	# glade callbacks - file menu
 	def new_project(self,*args):
@@ -256,32 +287,27 @@ class Transcribe:
 		w = Visualizer.FretboardWindow(self.project.control)
 		w.show_all()
 
+#	def close_visualizer(self, visualizer, event):
+#		self.visualizers.remove(visualizer)
+
+#	def open_total(self,widget):
+##		fretboard = Visualizer.TotalFretboard()
+#		fretboard = Visualizer.Fretboard(method="cumulate")
+#		Visualizer.VisualizerWindow(self.visualizers, "TotalFretboard", fretboard)
+
+#	def open_singlestring(self,widget,string,semitone):
+#		w = Visualizer.SingleStringWindow(tuning=semitone)
+#		w.show_all()
+#
 #		self.visualizers.append(w)
 #		w.connect("delete_event", self.close_visualizer)
-#		fretboard = Visualizer.FretboardVis()
-#		Visualizer.VisualizerWindow(self.visualizers, "Fretboard", fretboard)
-
-	def close_visualizer(self, visualizer, event):
-		self.visualizers.remove(visualizer)
-
-	def open_total(self,widget):
-#		fretboard = Visualizer.TotalFretboard()
-		fretboard = Visualizer.Fretboard(method="cumulate")
-		Visualizer.VisualizerWindow(self.visualizers, "TotalFretboard", fretboard)
-
-	def open_singlestring(self,widget,string,semitone):
-		w = Visualizer.SingleStringWindow(tuning=semitone)
-		w.show_all()
-
-		self.visualizers.append(w)
-		w.connect("delete_event", self.close_visualizer)
 #		singlestring = Visualizer.SingleString(tune=semitone)
 #		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
 
-	def open_singlestringarea(self,widget,string,semitone):
-		fretboard = Visualizer.SingleString(tune=semitone, method="cumulate")
-#		fretboard = Visualizer.SingleStringArea(tune=semitone)
-		Visualizer.VisualizerWindow(self.visualizers, "SingleStringArea %d (%d)" % (string, semitone), fretboard)
+#	def open_singlestringarea(self,widget,string,semitone):
+#		fretboard = Visualizer.SingleString(tune=semitone, method="cumulate")
+##		fretboard = Visualizer.SingleStringArea(tune=semitone)
+#		Visualizer.VisualizerWindow(self.visualizers, "SingleStringArea %d (%d)" % (string, semitone), fretboard)
 
 	def open_plot(self, widget):
 		if not self.project: return
@@ -296,37 +322,6 @@ class Transcribe:
 		w = Analyze.Analyze()
 		w.show_all()
 		w.plot_spectrum(frq, power)
-
-#	def compare(self,widget):
-#		if not self.project: return
-#
-#		marker = self.project.timeline.ruler.get_playback_marker()
-#		if not marker: return
-#
-#		start,duration = marker
-#
-#		frq, power = self.project.appsinkpipeline.get_spectrum(start,start+duration)
-#
-#		if self.builder.get_object("cutoff_button").get_active():
-#			max_magnitude = self.builder.get_object("cutoff").get_value()
-#		else:
-#			max_magnitude = None
-#
-#		spectrum = Visualizer.VisualizerControl(frq, power=power, max_magnitude=max_magnitude)
-#
-#		c = goocanvas.Canvas()
-#		c.set_property("has-tooltip",True)
-#		f = Visualizer.Fretboard2(spectrum=spectrum,parent=c.get_root_item())
-#		width = f.get_width()
-#		height = f.get_height()
-#		c.set_bounds(0,0,width,height)
-#		c.set_size_request(width,height)
-#		w = gtk.Window()
-#		w.set_title("Compare")
-#		w.add(c)
-#		w.show_all()
-#
-#		w = Visualizer.CompareWindow()
 
 	# glade callbacks - toolbar
 	def set_default_mode(self,widget):
@@ -358,7 +353,7 @@ class Transcribe:
 
 		start,duration = playback_marker
 
-		dialog = gtk.Dialog(title="Fret", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
+		dialog = gtk.Dialog(title="Add note to tabulature", flags=gtk.DIALOG_DESTROY_WITH_PARENT|gtk.DIALOG_MODAL, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,gtk.STOCK_OK, gtk.RESPONSE_ACCEPT))
 
 		combobox = gtk.combo_box_new_text()
 		for i in xrange(len(self.project.timeline.tabulature.strings)):
