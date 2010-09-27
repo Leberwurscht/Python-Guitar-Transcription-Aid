@@ -271,9 +271,11 @@ class FretboardBase(goocanvas.Group):
 		for overtone, frequency, power, peak_center, difference_in_semitones in self.control.analyze_overtones(semitone, 10):
 			s = frequency_to_semitone(frequency)
 			near = int(round(s))
+#			onset_min,onset_max =  ===> does not work, this needs to be moved to transcribe.py
 			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, note_name(near))
 			text += "\tPower: %f (%f dB)\n" % (power, power_to_magnitude(power))
 			text += "\tPosition: %f Hz (off by %f semitones)\n" % (peak_center, difference_in_semitones)
+#			text += "\tOnset: between %f s and %f s\n" % (onset_min, onset_max)
 			text += "\n"
 
 		w = gtk.Window()

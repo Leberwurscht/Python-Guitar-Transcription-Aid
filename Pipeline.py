@@ -115,24 +115,25 @@ class AppSinkPipeline(gst.Pipeline):
 
 		return frq, power
 
-	def find_onset(self, lower, upper, start, rising=1.7, interval=0.1, divisor=2, runs=3):
-		""" Find onset of a note by searching backwards from 'start' positon. 'lower' and 'upper' declares the frequency range that is
+	def find_onset(self, lower, upper, start, rising=1.7, interval=0.1, divisor=2, runs=3, limit=None):
+		""" Find onset of a note by searching backwards from 'start' position. 'lower' and 'upper' declares the frequency range that is
 		    considered. 'rising' declares how strong the power has to increase for an onset. For FFT, chunks of duration 'interval'
 		    are used. 'divisor' specifies a divisor to divide 'interval' by, yielding the temporal delta used to go backwards. 'runs'
-		    is how many refinement runs should be performed. """
-		# go backwards
-		# if power is lower than max(last 2*divisor powers)/rising then we know that onset is in range [current time, current time + 2*interval]
-		# now delta /= 2., find "highest rising" within that interval, that means:
-		# ...?
+		    is how many refinement runs should be performed. You can specify how far to go back in time with 'limit'. """
 
 		delta = 1.0*interval/divisor
 		interval_radius = interval/2.
-		power_memory = 2*divisor
+		power_memory = divisor + 1
+
+		if not limit:
+			position_limit = interval_radius
+		else:
+			position_limit = max(interval_radius, start-limit)
 
 		last_powers = []
 		position = start
 
-		while True:
+		while position>=position_limit:
 			frq, power = self.get_spectrum(position - interval_radius, position + interval_radius)
 
 			spline = scipy.interpolate.InterpolatedUnivariateSpline(frq, power, None, [None, None], 1)
@@ -144,8 +145,6 @@ class AppSinkPipeline(gst.Pipeline):
 			assert len(last_powers)>0
 			assert len(last_powers)<=power_memory
 
-			print position, last_powers
-
 			if power <= max(last_powers)/rising:
 				# onset found
 				break
@@ -153,17 +152,49 @@ class AppSinkPipeline(gst.Pipeline):
 			# search backwards
 			position -= delta
 
-		print "found at",position
-
 		min_position = position
-		max_position = position + 2.*interval
+		max_position = position + power_memory*delta
 
 		print min_position, max_position
 
-		if not runs==0:
-			raise NotImplementedError
+		for run in xrange(runs):
+			delta /= 2.
+			interval /= 2.
+			interval_radius = interval/2.
 
-		return min_position
+			last_powers = []
+			position = max_position
+
+			max_rising = 0
+			max_rising_position = min_position
+
+			while position>=min_position:
+				frq, power = self.get_spectrum(position - interval_radius, position + interval_radius)
+
+				spline = scipy.interpolate.InterpolatedUnivariateSpline(frq, power, None, [None, None], 1)
+				power = spline.integral(lower, upper)
+
+				if len(last_powers)==power_memory: del last_powers[0]
+				last_powers.append(power)
+
+				assert len(last_powers)>0
+				assert len(last_powers)<=power_memory
+
+				rising = max(last_powers) - power
+
+				if rising > max_rising:
+					max_rising = rising
+					max_rising_pos = position
+
+				# search backwards
+				position -= delta
+
+			min_position = position
+			max_position = position + power_memory*delta
+
+			print "run",run,"interval",interval, "min_pos", min_position, "max_pos", max_position
+
+		return min_position, max_position
 
 class Pipeline(gst.Pipeline):
 	def __init__(self,filename=None, bands=4096):

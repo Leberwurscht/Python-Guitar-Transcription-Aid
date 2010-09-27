@@ -178,7 +178,7 @@ class Transcribe:
 		lower = Visualizer.semitone_to_frequency(semitone-0.5)
 		upper = Visualizer.semitone_to_frequency(semitone+0.5)
 
-		onset = self.project.appsinkpipeline.find_onset(lower, upper, position, runs=0)
+		onset, onset_max = self.project.appsinkpipeline.find_onset(lower, upper, position)
 
 		self.project.timeline.ruler.set_playback_marker(onset, start+duration-onset)
 
@@ -286,28 +286,6 @@ class Transcribe:
 
 		w = Visualizer.FretboardWindow(self.project.control)
 		w.show_all()
-
-#	def close_visualizer(self, visualizer, event):
-#		self.visualizers.remove(visualizer)
-
-#	def open_total(self,widget):
-##		fretboard = Visualizer.TotalFretboard()
-#		fretboard = Visualizer.Fretboard(method="cumulate")
-#		Visualizer.VisualizerWindow(self.visualizers, "TotalFretboard", fretboard)
-
-#	def open_singlestring(self,widget,string,semitone):
-#		w = Visualizer.SingleStringWindow(tuning=semitone)
-#		w.show_all()
-#
-#		self.visualizers.append(w)
-#		w.connect("delete_event", self.close_visualizer)
-#		singlestring = Visualizer.SingleString(tune=semitone)
-#		Visualizer.VisualizerWindow(self.visualizers, "SingleString %d (%d)" % (string, semitone), singlestring)
-
-#	def open_singlestringarea(self,widget,string,semitone):
-#		fretboard = Visualizer.SingleString(tune=semitone, method="cumulate")
-##		fretboard = Visualizer.SingleStringArea(tune=semitone)
-#		Visualizer.VisualizerWindow(self.visualizers, "SingleStringArea %d (%d)" % (string, semitone), fretboard)
 
 	def open_plot(self, widget):
 		if not self.project: return
@@ -462,8 +440,6 @@ class Transcribe:
 		if not self.project: return
 
 		self.project.control.props.autoupdate = self.builder.get_object("autoupdate").get_active()
-#		if widget.get_active(): self.autoupdate = True
-#		else: self.autoupdate = False		
 
 	def update_visualizers(self,widget):
 		if not self.project: return
