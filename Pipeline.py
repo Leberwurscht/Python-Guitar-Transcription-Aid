@@ -2,18 +2,9 @@
 
 import gst, gobject, array, numpy
 import scipy.interpolate
+import Math
 
 MAX_FFT_SAMPLES = 8192
-
-def windowed_fft(data):
-	# apply window
-	window = numpy.hamming(len(data))
-	data *= window
-
-	# fft
-	power = numpy.abs(numpy.fft.rfft(data))**2. / len(data)**2.
-
-	return power
 
 class AppSinkPipeline(gst.Pipeline):
 	def __init__(self,filename=None):
@@ -105,7 +96,7 @@ class AppSinkPipeline(gst.Pipeline):
 
 		for i in xrange(ffts):
 				shift = int(0.5*i*samples)
-				power += windowed_fft(data[ shift : shift+samples ])
+				power += Math.windowed_fft(data[ shift : shift+samples ])
 
 		power /= ffts
 

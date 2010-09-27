@@ -20,7 +20,7 @@ gobject.threads_init()
 
 import sys
 
-import Project, Visualizer, Analyze, Timeline, Pipeline
+import Project, Visualizer, Analyze, Timeline, Pipeline, Math
 import numpy
 
 class Transcribe:
@@ -155,8 +155,8 @@ class Transcribe:
 
 			spline = scipy.interpolate.InterpolatedUnivariateSpline(frq, power, None, [None, None], 1)
 
-			lower = Visualizer.semitone_to_frequency(semitone-0.5)
-			upper = Visualizer.semitone_to_frequency(semitone+0.5)
+			lower = Math.semitone_to_frequency(semitone-0.5)
+			upper = Math.semitone_to_frequency(semitone+0.5)
 			total = spline.integral(lower, upper)
 
 			x.append(pos)
@@ -176,8 +176,8 @@ class Transcribe:
 
 		position = start + duration/2.
 
-		lower = Visualizer.semitone_to_frequency(semitone-0.5)
-		upper = Visualizer.semitone_to_frequency(semitone+0.5)
+		lower = Math.semitone_to_frequency(semitone-0.5)
+		upper = Math.semitone_to_frequency(semitone+0.5)
 
 		onset, onset_max = self.project.appsinkpipeline.find_onset(lower, upper, position)
 
@@ -190,21 +190,20 @@ class Transcribe:
 		text = ""
 
 		for overtone, frequency, power, peak_center, difference_in_semitones in control.analyze_overtones(semitone, 10):
-			s = Visualizer.frequency_to_semitone(frequency)
-			near = int(round(s))
+			s = Math.frequency_to_semitone(frequency)
 			position = control.start + control.duration/2.
-			lower = Visualizer.semitone_to_frequency(s-0.5)
-			upper = Visualizer.semitone_to_frequency(s+0.5)
+			lower = Math.semitone_to_frequency(s-0.5)
+			upper = Math.semitone_to_frequency(s+0.5)
 			onset_min,onset_max = self.project.appsinkpipeline.find_onset(lower,upper, position, limit=5)
-			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, Visualizer.note_name(near))
-			text += "\tPower: %f (%f dB)\n" % (power, Visualizer.power_to_magnitude(power))
+			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, Math.note_name(s))
+			text += "\tPower: %f (%f dB)\n" % (power, Math.power_to_magnitude(power))
 			text += "\tPosition: %f Hz (off by %f semitones)\n" % (peak_center, difference_in_semitones)
 			text += "\tOnset: between %fs and %fs\n" % (onset_min, onset_max)
 			text += "\n"
 
 		w = gtk.Window()
 		w.set_size_request(500,400)
-		w.set_title("Info on %s (%f)" % (Visualizer.note_name(semitone), semitone))
+		w.set_title("Info on %s (%f)" % (Math.note_name(semitone), semitone))
 
 		sw = gtk.ScrolledWindow()
 		w.add(sw)

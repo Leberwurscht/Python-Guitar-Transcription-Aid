@@ -74,7 +74,6 @@ class Project:
 		self.pipeline = Pipeline.Pipeline(self.audiofile)
 		self.timeline = Timeline.Timeline(self, strings)
 		self.timeline.show_all()
-#		self.spectrumlistener = spectrumvisualizer.base(self.pipeline.spectrum, self.pipeline)
 		self.control = Visualizer.VisualizerControl(self.pipeline)
 
 	def save(self):

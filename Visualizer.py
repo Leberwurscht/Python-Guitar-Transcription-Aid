@@ -3,30 +3,8 @@
 import gtk, numpy, cairo, goocanvas, gobject
 import gst
 import scipy.interpolate
+import Math
 from VisualizerControlBase import base as VisualizerControlBase
-
-REFERENCE_FREQUENCY = 440
-#standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
-note_names = ["a","ais","b","c","cis","d","dis","e","f","fis","g","gis"]
-
-def note_name(semitone):
-	return note_names[int(round(semitone + 1000*12)) % 12]
-
-def power_to_magnitude(power, threshold=-60):
-	magnitudes = numpy.maximum(threshold, 10.0*numpy.log10(power))
-	return magnitudes
-
-def magnitude_to_power(magnitude):
-	power = 10.0**(magnitude/10.0)
-	return power
-
-def frequency_to_semitone(frequency):
-	semitone = 12.*numpy.log2(frequency/REFERENCE_FREQUENCY)
-	return semitone
-
-def semitone_to_frequency(semitone):
-	frequency = REFERENCE_FREQUENCY * (2.**(1./12.))**semitone
-	return frequency
 
 # == PLAN ==
 
@@ -65,7 +43,7 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 		goocanvas.ItemSimple.__init__(self,**kwargs)
 
 		if not self.props.tooltip:
-			self.props.tooltip = note_name(self.semitone)+" ("+str(self.semitone)+") ["+str(semitone_to_frequency(self.semitone))+" Hz]"
+			self.props.tooltip = Math.note_name(self.semitone)+" ("+str(self.semitone)+") ["+str(Math.semitone_to_frequency(self.semitone))+" Hz]"
 
 		self.method = method
 
@@ -83,7 +61,7 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 			cr.set_source_rgb(1.,1.,1.)
 		elif self.method=="cumulate":
 			fpower, power, center, standard_deviation, upper_dependence, lower_dependence = self.control.analyze_semitone(self.semitone)
-			magnitude = power_to_magnitude(power / 1.5 / 1000)
+			magnitude = Math.power_to_magnitude(power / 1.5 / 1000)
 			const,slope = self.control.get_brightness_coefficients_for_magnitude()
 			brightness = slope*magnitude + const
 			print self.semitone,"mag",magnitude,"tpow",power,"b",brightness,"pow",fpower
@@ -94,7 +72,7 @@ class Semitone(goocanvas.ItemSimple, goocanvas.Item):
 			lower_dependence = min(1.,lower_dependence)
 			total_dependence = min(1., upper_dependence+lower_dependence)
 			power *= 1. - total_dependence
-			magnitude = power_to_magnitude(power / 1.5 / 1000)
+			magnitude = Math.power_to_magnitude(power / 1.5 / 1000)
 			const,slope = self.control.get_brightness_coefficients_for_magnitude()
 			brightness = slope*magnitude + const
 			cr.set_source_rgb(brightness,brightness,brightness)
@@ -252,7 +230,7 @@ class FretboardBase(goocanvas.Group):
 	def press_semitone(self,semitone,target,event,string,fret):
 		if event.button==1:
 			self.pipeline.get_by_name("volume").set_property("volume", self.volume.get_value())
-			self.pipeline.get_by_name("src").set_property("freq", semitone_to_frequency(semitone.semitone))
+			self.pipeline.get_by_name("src").set_property("freq", Math.semitone_to_frequency(semitone.semitone))
 			self.pipeline.set_state(gst.STATE_PLAYING)
 		elif event.button==3:
 			self.open_context_menu(semitone,event,string,fret)
@@ -295,7 +273,7 @@ class Fretboard(FretboardBase):
 		stringcaptions = goocanvas.Group(parent=self)
 		for string in xrange(len(self.strings)):
 			semitone = self.strings[string]
-			name = note_name(semitone).upper()
+			name = Math.note_name(semitone).upper()
 			text = goocanvas.Text(parent=stringcaptions, x=0, y=string*self.rectheight, text=name, anchor=gtk.ANCHOR_EAST, font=10)
 			text.connect("button_release_event", self.open_string, string)
 
@@ -503,7 +481,7 @@ class SingleStringWindow(FretboardWindowBase):
 	def __init__(self, control, tuning=-5, **kwargs):
 		FretboardWindowBase.__init__(self, **kwargs)
 
-		self.set_title("SingleString "+note_name(tuning)+" ("+str(tuning)+")")
+		self.set_title("SingleString "+Math.note_name(tuning)+" ("+str(tuning)+")")
 
 		root = self.canvas.get_root_item()
 		self.visualizer = SingleString(control, self.volume, parent=root, tuning=tuning)
@@ -616,15 +594,15 @@ class VisualizerControl(VisualizerControlBase):
 
 	# get data
 	def get_semitone(self):
-		if self.semitone==None: self.semitone = frequency_to_semitone(self.frequency)
+		if self.semitone==None: self.semitone = Math.frequency_to_semitone(self.frequency)
 		return self.semitone
 
 	def get_magnitude(self):
-		if self.magnitude==None: self.magnitude = power_to_magnitude(self.power)
+		if self.magnitude==None: self.magnitude = Math.power_to_magnitude(self.power)
 		return self.magnitude
 
 	def get_power(self):
-		if self.power==None: self.power = magnitude_to_power(self.magnitude)
+		if self.power==None: self.power = Math.magnitude_to_power(self.magnitude)
 		return self.power
 
 	def get_brightness_coefficients_for_magnitude(self):
@@ -719,25 +697,25 @@ class VisualizerControl(VisualizerControlBase):
 
 	def analyze_overtones(self,semitone,overtones=None):
 		""" calculates power and peak center for each overtone and yields tuples (overtone, frequency, power, peak_center, difference_in_semitones) """
-		frequency = semitone_to_frequency(semitone)
+		frequency = Math.semitone_to_frequency(semitone)
 		peak_radius = self.get_peak_radius()
 
 		overtone=0
 
 		while overtones==None or overtone<overtones:
 			f = frequency*(overtone+1)
-			s = frequency_to_semitone(f)
+			s = Math.frequency_to_semitone(f)
 
 			lower_frequency = f - peak_radius*1.65
 			upper_frequency = f + peak_radius*1.65
 
-			lower_frequency = min(lower_frequency, semitone_to_frequency(s-0.5))
-			upper_frequency = max(upper_frequency, semitone_to_frequency(s+0.5))
+			lower_frequency = min(lower_frequency, Math.semitone_to_frequency(s-0.5))
+			upper_frequency = max(upper_frequency, Math.semitone_to_frequency(s+0.5))
 
 			power = self.get_power_in_frequency_range(lower_frequency,upper_frequency)
 			peak_center = self.get_powerfreq_spline().integral(lower_frequency,upper_frequency) / power
 
-			difference_in_semitones = frequency_to_semitone(peak_center) - s
+			difference_in_semitones = Math.frequency_to_semitone(peak_center) - s
 
 			yield overtone, f, power, peak_center, difference_in_semitones
 
@@ -790,13 +768,13 @@ class VisualizerControl(VisualizerControlBase):
 			undertone_frequency = fundamental_frequency / undertone
 			if undertone_frequency < undertone_limit: break
 
-			s = frequency_to_semitone(undertone_frequency)
+			s = Math.frequency_to_semitone(undertone_frequency)
 
 			lower_frequency = undertone_frequency - peak_radius*1.65
 			upper_frequency = undertone_frequency + peak_radius*1.65
 
-			lower_frequency = min(lower_frequency, semitone_to_frequency(s-0.5))
-			upper_frequency = max(upper_frequency, semitone_to_frequency(s+0.5))
+			lower_frequency = min(lower_frequency, Math.semitone_to_frequency(s-0.5))
+			upper_frequency = max(upper_frequency, Math.semitone_to_frequency(s+0.5))
 
 			power = self.get_power_in_frequency_range(lower_frequency,upper_frequency)
 
