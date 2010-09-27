@@ -192,11 +192,14 @@ class Transcribe:
 		for overtone, frequency, power, peak_center, difference_in_semitones in control.analyze_overtones(semitone, 10):
 			s = Visualizer.frequency_to_semitone(frequency)
 			near = int(round(s))
-#			onset_min,onset_max = self.project.appsinkpipeline.find_onset(lower,upper, position)
+			position = control.start + control.duration/2.
+			lower = Visualizer.semitone_to_frequency(s-0.5)
+			upper = Visualizer.semitone_to_frequency(s+0.5)
+			onset_min,onset_max = self.project.appsinkpipeline.find_onset(lower,upper, position, limit=5)
 			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, Visualizer.note_name(near))
 			text += "\tPower: %f (%f dB)\n" % (power, Visualizer.power_to_magnitude(power))
 			text += "\tPosition: %f Hz (off by %f semitones)\n" % (peak_center, difference_in_semitones)
-#			text += "\tOnset: between %f s and %f s\n" % (onset_min, onset_max)
+			text += "\tOnset: between %fs and %fs\n" % (onset_min, onset_max)
 			text += "\n"
 
 		w = gtk.Window()

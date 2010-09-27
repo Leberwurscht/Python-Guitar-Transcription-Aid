@@ -155,8 +155,6 @@ class AppSinkPipeline(gst.Pipeline):
 		min_position = position
 		max_position = position + delta*divisor
 
-		print min_position, max_position
-
 		for run in xrange(runs):
 			delta /= 2.
 			interval /= 2.
@@ -191,8 +189,6 @@ class AppSinkPipeline(gst.Pipeline):
 
 			min_position = position
 			max_position = position + delta*divisor
-
-			print "run",run,"interval",interval, "min_pos", min_position, "max_pos", max_position
 
 		return min_position, max_position
 
