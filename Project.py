@@ -68,7 +68,7 @@ class Project:
 		self.audiofile = audiofile
 		self.touched = True
 
-		if not strings: strings = [-29,-24,-19,-14,-10,-5]
+		if not strings: strings = [-5,-10,-14,-19,-24,-29]
 
 		self.appsinkpipeline = Pipeline.AppSinkPipeline(self.audiofile)
 		self.pipeline = Pipeline.Pipeline(self.audiofile)

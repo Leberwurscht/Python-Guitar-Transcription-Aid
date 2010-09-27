@@ -6,7 +6,7 @@ import scipy.interpolate
 from VisualizerControlBase import base as VisualizerControlBase
 
 REFERENCE_FREQUENCY = 440
-standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
+#standard_tuning = {6:-29, 5:-24, 4:-19, 3:-14, 2:-10, 1:-5}
 note_names = ["a","ais","b","c","cis","d","dis","e","f","fis","g","gis"]
 
 def note_name(semitone):

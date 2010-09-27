@@ -156,6 +156,7 @@ class TabMarker(goocanvas.Group):
 		self.rect = goocanvas.Rect(parent=self,width=width,height=height,fill_color_rgba=0xaa0000aa)
 		self.text = goocanvas.Text(parent=self,text=str(fret), x=width*1.3)
 
+		self.props.x -= width/2.
 		self.props.y = self.string.tabulature.timeline.get_pts(start)
 
 		self.connect("button_release_event", self.clicked)
@@ -189,7 +190,7 @@ class String(goocanvas.Group):
 		self.tabulature = tabulature
 
 		height = tabulature.timeline.get_pts(tabulature.timeline.project.pipeline.duration)
-		goocanvas.polyline_new_line(self, 2,0, 2,height)
+		goocanvas.polyline_new_line(self, 0,0, 0,height)
 
 		self.markers = []
 
@@ -208,10 +209,11 @@ class Tabulature(goocanvas.Group):
 		self.timeline = timeline
 	
 		self.strings = []
+		max_x = (len(strings)-0.5)*self.spacing
 		for i in xrange(len(strings)):
 			tuning = strings[i]
 			string = String(self, tuning)
-			string.props.x = i*self.spacing
+			string.props.x = max_x - i*self.spacing
 			self.strings.append(string)
 
 	def get_width(self):
