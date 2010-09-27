@@ -645,7 +645,7 @@ class Transcribe:
 			limit *= decay_per_chunk
 			chunk = power[samples*i : samples*(i+1)]
 			avg_power = numpy.average(chunk)
-			power_spectrum = Pipeline.windowed_fft(chunk)
+			power_spectrum = Math.windowed_fft(chunk)
 			bands = len(power_spectrum)
 			frqs = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
 			time = delta_t*i+start

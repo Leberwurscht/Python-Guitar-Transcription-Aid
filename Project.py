@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import json
-import Pipeline, Timeline, Visualizer
+import Pipeline, Timeline
+from VisualizerControl import VisualizerControl
 
 class InvalidFileFormat(Exception): pass
 
@@ -74,7 +75,7 @@ class Project:
 		self.pipeline = Pipeline.Pipeline(self.audiofile)
 		self.timeline = Timeline.Timeline(self, strings)
 		self.timeline.show_all()
-		self.control = Visualizer.VisualizerControl(self.pipeline)
+		self.control = VisualizerControl(self.pipeline)
 
 	def save(self):
 		f = open(self.filename, "w")
