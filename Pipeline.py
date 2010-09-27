@@ -153,7 +153,7 @@ class AppSinkPipeline(gst.Pipeline):
 			position -= delta
 
 		min_position = position
-		max_position = position + power_memory*delta
+		max_position = position + delta*divisor
 
 		print min_position, max_position
 
@@ -190,7 +190,7 @@ class AppSinkPipeline(gst.Pipeline):
 				position -= delta
 
 			min_position = position
-			max_position = position + power_memory*delta
+			max_position = position + delta*divisor
 
 			print "run",run,"interval",interval, "min_pos", min_position, "max_pos", max_position
 
