@@ -263,35 +263,6 @@ class FretboardBase(goocanvas.Group):
 	def open_context_menu(self, rect, event, string, fret):
 		raise NotImplementedError, "override this method!"
 
-	def analyze_semitone(self,item,target,event,semitone):
-		if not self.control.has_data: return
-
-		text = ""
-
-		for overtone, frequency, power, peak_center, difference_in_semitones in self.control.analyze_overtones(semitone, 10):
-			s = frequency_to_semitone(frequency)
-			near = int(round(s))
-#			onset_min,onset_max =  ===> does not work, this needs to be moved to transcribe.py
-			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, note_name(near))
-			text += "\tPower: %f (%f dB)\n" % (power, power_to_magnitude(power))
-			text += "\tPosition: %f Hz (off by %f semitones)\n" % (peak_center, difference_in_semitones)
-#			text += "\tOnset: between %f s and %f s\n" % (onset_min, onset_max)
-			text += "\n"
-
-		w = gtk.Window()
-		w.set_size_request(500,400)
-		w.set_title("Info on %s (%f)" % (note_name(semitone), semitone))
-
-		sw = gtk.ScrolledWindow()
-		w.add(sw)
-
-		tv = gtk.TextView()
-		tv.get_buffer().set_text(text)
-		tv.set_editable(False)
-		sw.add(tv)
-
-		w.show_all()
-
 	def add_tab_marker(self, item, target, event, string, fret):
 		self.control.emit("add-tab-marker", string, fret)
 
@@ -300,6 +271,9 @@ class FretboardBase(goocanvas.Group):
 
 	def find_onset(self, item, target, event, semitone):
 		self.control.emit("find-onset", semitone)
+
+	def analyze_semitone(self, item, target, event, semitone):
+		self.control.emit("analyze-semitone", semitone)
 
 	# custom properties
 	def do_get_property(self,pspec):
@@ -545,7 +519,8 @@ class VisualizerControl(VisualizerControlBase):
 		'new-data': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
 		'add-tab-marker': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT, gobject.TYPE_INT)),
 		'plot-evolution': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,)),
-		'find-onset': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,))
+		'find-onset': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,)),
+		'analyze-semitone': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,))
 	}
 
 	""" holds data for visualizers, calculates and caches different scales """

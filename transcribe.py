@@ -95,6 +95,7 @@ class Transcribe:
 		project.control.connect("add_tab_marker", self.vis_add_tab_marker)
 		project.control.connect("plot_evolution", self.vis_plot_evolution)
 		project.control.connect("find_onset", self.find_onset)
+		project.control.connect("analyze_semitone", self.analyze_semitone)
 
 		self.project = project
 		self.set_autoupdate()
@@ -181,6 +182,36 @@ class Transcribe:
 		onset, onset_max = self.project.appsinkpipeline.find_onset(lower, upper, position)
 
 		self.project.timeline.ruler.set_playback_marker(onset, start+duration-onset)
+
+	def analyze_semitone(self,control,semitone):
+		if not self.project: return
+		if not control.has_data: return
+
+		text = ""
+
+		for overtone, frequency, power, peak_center, difference_in_semitones in control.analyze_overtones(semitone, 10):
+			s = Visualizer.frequency_to_semitone(frequency)
+			near = int(round(s))
+#			onset_min,onset_max =
+			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, Visualizer.note_name(near))
+			text += "\tPower: %f (%f dB)\n" % (power, Visualizer.power_to_magnitude(power))
+			text += "\tPosition: %f Hz (off by %f semitones)\n" % (peak_center, difference_in_semitones)
+#			text += "\tOnset: between %f s and %f s\n" % (onset_min, onset_max)
+			text += "\n"
+
+		w = gtk.Window()
+		w.set_size_request(500,400)
+		w.set_title("Info on %s (%f)" % (Visualizer.note_name(semitone), semitone))
+
+		sw = gtk.ScrolledWindow()
+		w.add(sw)
+
+		tv = gtk.TextView()
+		tv.get_buffer().set_text(text)
+		tv.set_editable(False)
+		sw.add(tv)
+
+		w.show_all()
 
 	# glade callbacks - file menu
 	def new_project(self,*args):
