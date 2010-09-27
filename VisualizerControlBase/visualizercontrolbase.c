@@ -36,6 +36,8 @@ typedef struct {
 	guint bands;
 	gint rate;
 	gint threshold;
+	gfloat start;
+	gfloat duration;
 	PyObject *magnitudes;
 } spectrum_message;
 
@@ -46,7 +48,7 @@ static gboolean delayed_spectrum_update(GstClock *sync_clock, GstClockTime time,
 
 	if (GST_CLOCK_TIME_IS_VALID(time))
 	{
-		g_signal_emit_by_name(mess->gobj, "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->magnitudes);
+		g_signal_emit_by_name(mess->gobj, "magnitudes_available", mess->bands, mess->rate, mess->threshold, mess->start, mess->duration, mess->magnitudes);
 	}
 
 	g_object_unref(mess->gobj);
@@ -95,6 +97,14 @@ static gboolean on_message(GstBus *bus, GstMessage *message, gpointer data)
 
 			// set bands and threshold
 			g_object_get(message_element, "bands", &(mess->bands), "threshold", &(mess->threshold), NULL);
+
+			// set start and duration
+			GstClockTime streamtime, duration;
+			gst_structure_get_clock_time(message_structure, "stream-time", &streamtime);
+			gst_structure_get_clock_time(message_structure, "duration", &duration);
+
+			mess->start = (gfloat)streamtime / GST_SECOND;
+			mess->duration = (gfloat)duration / GST_SECOND;
 
 			// set rate
 			GstPad *sink = gst_element_get_static_pad(GST_ELEMENT(base_object->spectrum_element->obj), "sink");
@@ -188,9 +198,11 @@ PyMODINIT_FUNC initVisualizerControlBase(void)
 	// add "magnitudes-available" signal to "base" type
 	// (see http://www.pygtk.org/articles/subclassing-gobject/sub-classing-gobject-in-python.htm, "Creating your own signals")
 	PyObject *type_int = PyObject_GetAttrString(gobject_module, "TYPE_INT");
+	PyObject *type_float = PyObject_GetAttrString(gobject_module, "TYPE_FLOAT");
 	PyObject *type_pyobject = PyObject_GetAttrString(gobject_module, "TYPE_PYOBJECT");
-	PyObject *signal_args = PyTuple_Pack(4, type_int, type_int, type_int, type_pyobject);
+	PyObject *signal_args = PyTuple_Pack(6, type_int, type_int, type_int, type_float, type_float, type_pyobject);
 	Py_DECREF(type_int);
+	Py_DECREF(type_float);
 	Py_DECREF(type_pyobject);
 
 	PyObject *type_none = PyObject_GetAttrString(gobject_module, "TYPE_NONE");

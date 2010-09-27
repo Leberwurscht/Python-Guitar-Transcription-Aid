@@ -579,9 +579,9 @@ class VisualizerControl(VisualizerControlBase):
 			raise Exception, "Invalid property name"
 
 	# callbacks
-	def autoupdate(self, spectrumdata, bands, rate, threshold, magnitude):
+	def autoupdate(self, control, bands, rate, threshold, start, duration, magnitude):
 		frequency = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
-		self.set_magnitude(frequency, numpy.array(magnitude))
+		self.set_magnitude(start, duration, frequency, numpy.array(magnitude))
 
 	# set data
 	def clear(self):
@@ -593,16 +593,22 @@ class VisualizerControl(VisualizerControlBase):
 		self.powerfreq_spline = None
 		self.gradient = None
 		self.has_data = None
+		self.start = None
+		self.duration = None
 
-	def set_magnitude(self, frequency, magnitude):
+	def set_magnitude(self, start, duration, frequency, magnitude):
 		self.clear()
+		self.start = start
+		self.duration = duration
 		self.frequency = frequency
 		self.magnitude = magnitude
 		self.has_data = True
 		self.emit("new_data")
 		
-	def set_power(self, frequency, power):
+	def set_power(self, start, duration, frequency, power):
 		self.clear()
+		self.start = start
+		self.duration = duration
 		self.frequency = frequency
 		self.power = power
 		self.has_data = True

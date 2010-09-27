@@ -192,7 +192,7 @@ class Transcribe:
 		for overtone, frequency, power, peak_center, difference_in_semitones in control.analyze_overtones(semitone, 10):
 			s = Visualizer.frequency_to_semitone(frequency)
 			near = int(round(s))
-#			onset_min,onset_max =
+#			onset_min,onset_max = self.project.appsinkpipeline.find_onset(lower,upper, position)
 			text += "%d. overtone: %f Hz (semitone %f; near %s)\n" % (overtone, frequency, s, Visualizer.note_name(near))
 			text += "\tPower: %f (%f dB)\n" % (power, Visualizer.power_to_magnitude(power))
 			text += "\tPosition: %f Hz (off by %f semitones)\n" % (peak_center, difference_in_semitones)
@@ -487,7 +487,7 @@ class Transcribe:
 #		else:
 #			max_magnitude = None
 
-		self.project.control.set_power(frq, power)
+		self.project.control.set_power(start, duration, frq, power)
 #		spectrum = Visualizer.VisualizerControl(frq, power=power, max_magnitude=max_magnitude)
 #
 #		for viswindow in self.visualizers:
