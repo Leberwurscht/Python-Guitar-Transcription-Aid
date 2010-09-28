@@ -111,6 +111,8 @@ class AppSinkPipeline(gst.Pipeline):
 		    considered. 'rising' declares how strong the power has to increase for an onset. For FFT, chunks of duration 'interval'
 		    are used. 'divisor' specifies a divisor to divide 'interval' by, yielding the temporal delta used to go backwards. 'runs'
 		    is how many refinement runs should be performed. You can specify how far to go back in time with 'limit'. """
+		# PROBLEM: seems to be sensitive to oscillations of power that exist due to interfering sines with nearby frequencies
+		# or due to audio compression. Should also consider overtones to avoid this.
 
 		delta = 1.0*interval/divisor
 		interval_radius = interval/2.

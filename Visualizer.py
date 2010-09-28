@@ -243,6 +243,14 @@ class FretboardBase(goocanvas.Group):
 	def analyze_semitone(self, item, target, event, semitone):
 		self.control.emit("analyze-semitone", semitone)
 
+	def open_overtones(self, item, target, event, tuning):
+		w = OvertoneWindow(self.control, tuning)
+		w.show_all()
+
+	def open_undertones(self, item, target, event, tuning):
+		w = UndertoneWindow(self.control, tuning)
+		w.show_all()
+
 	# custom properties
 	def do_get_property(self,pspec):
 		return getattr(self, pspec.name)
@@ -265,7 +273,7 @@ class Fretboard(FretboardBase):
 			semitone = self.strings[string]
 			name = Math.note_name(semitone).upper()
 			text = goocanvas.Text(parent=stringcaptions, x=0, y=string*self.rectheight, text=name, anchor=gtk.ANCHOR_EAST, font=10)
-			text.connect("button_release_event", self.open_string, string)
+			text.connect("button_release_event", self.open_overtones, self.strings[string])
 
 		startx = posx + stringcaptions.get_bounds().x2-stringcaptions.get_bounds().x1 + 5
 		starty = posy + fretcaptions.get_bounds().y2-fretcaptions.get_bounds().y1
@@ -282,8 +290,12 @@ class Fretboard(FretboardBase):
 	def open_context_menu(self, rect, event, string, fret):
 		menu = gtk.Menu()
 
-		item = gtk.MenuItem("Open string")
-		item.connect("activate", self.open_string, item, None, string)
+		item = gtk.MenuItem("Overtones")
+		item.connect("activate", self.open_overtones, item, None, self.strings[string])
+		menu.append(item)
+
+		item = gtk.MenuItem("Undertones")
+		item.connect("activate", self.open_undertones, item, None, self.strings[string])
 		menu.append(item)
 
 		item = gtk.MenuItem("Analyze")
@@ -305,11 +317,7 @@ class Fretboard(FretboardBase):
 		menu.show_all()
 		menu.popup(None, None, None, event.button, event.time)
 
-	def open_string(self, item, target, event, string):
-		w = SingleStringWindow(self.control, self.strings[string])
-		w.show_all()
-
-class SingleString(FretboardBase):
+class Overtones(FretboardBase):
 	def __init__(self, control, volume, **kwargs):
 		if "tuning" in kwargs:
 			self.tuning = kwargs["tuning"]
@@ -330,15 +338,15 @@ class SingleString(FretboardBase):
 
 		if "method" in kwargs:
 			if not kwargs["method"] in ["gradient","cumulate"]:
-				raise ValueError, "invalid method for SingleString"
+				raise ValueError, "invalid method for Overtones"
 
 		FretboardBase.__init__(self, control, volume, **kwargs)
 
 	def construct(self, posx, posy):
 		# captions
 		fretcaptions = goocanvas.Group(parent=self)
-		for fret in xrange(0,self.frets+1):
-			text = goocanvas.Text(parent=fretcaptions, x=fret*self.rectwidth, y=0, text=str(fret), anchor=gtk.ANCHOR_NORTH, font=10)
+		for fret in xrange(1,self.frets+1):
+			goocanvas.Text(parent=fretcaptions, x=fret*self.rectwidth, y=0, text=str(fret), anchor=gtk.ANCHOR_NORTH, font=10)
 
 		stringcaptions = goocanvas.Group(parent=self)
 		goocanvas.Text(parent=stringcaptions, x=0, y=0, text="f.", anchor=gtk.ANCHOR_EAST, font=10)
@@ -359,36 +367,152 @@ class SingleString(FretboardBase):
 		FretboardBase.construct(self, startx, starty)
 
 		# analyze
-		y = self.get_bounds().y2 + 10
-		for fret in xrange(0,self.frets+1):
-			x = startx + self.rectwidth*fret
-			rect = Semitone(self.control, semitone=self.tuning+fret, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-
-		y += self.rectheight
-		for fret in xrange(0,self.frets+1):
-			x = startx + self.rectwidth*fret
-			rect = Semitone(self.control, semitone=self.tuning+fret, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-
-		y += self.rectheight
-		for fret in xrange(0,self.frets+1):
-			x = startx + self.rectwidth*fret
-			rect = Semitone(self.control, semitone=self.tuning+fret, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-
-		y += self.rectheight
-		for fret in xrange(0,self.frets+1):
-			x = startx + self.rectwidth*fret
-			rect = Semitone(self.control, semitone=self.tuning+fret, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
-
-		y += self.rectheight
-		for fret in xrange(0,self.frets+1):
-			x = startx + self.rectwidth*fret
-			rect = Semitone(self.control, semitone=self.tuning+fret, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#		y = self.get_bounds().y2 + 10
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
 
 	# callbacks
 	def open_context_menu(self, rect, event, string, fret):
 		semitone = self.tuning + fret
 
 		menu = gtk.Menu()
+
+		item = gtk.MenuItem("Overtones")
+		item.connect("activate", self.open_overtones, item, None, self.strings[string])
+		menu.append(item)
+
+		item = gtk.MenuItem("Undertones")
+		item.connect("activate", self.open_undertones, item, None, self.strings[string])
+		menu.append(item)
+
+		item = gtk.MenuItem("Analyze")
+		item.connect("activate", self.analyze_semitone, item, None, self.tuning+fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Plot")
+		item.connect("activate", self.plot_evolution, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Find onset")
+		item.connect("activate", self.find_onset, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+#		item = gtk.MenuItem("Add to tabulature")
+#		item.connect("activate", self.add_tab_marker, item, None, string, fret)
+#		menu.append(item)
+
+		menu.show_all()
+		menu.popup(None, None, None, event.button, event.time)
+
+class Undertones(FretboardBase):
+	def __init__(self, control, volume, **kwargs):
+		if "tuning" in kwargs:
+			self.tuning = kwargs["tuning"]
+			del kwargs["tuning"]
+		else: self.tuning = -5
+
+		if "undertones" in kwargs:
+			self.undertones = kwargs["undertones"]
+			del kwargs["undertones"]
+		else: self.undertones = 10
+
+		if not "rectheight" in kwargs: kwargs["rectheight"] = 10
+
+		kwargs["strings"] = []
+		for divisor in xrange(1,self.undertones+2):
+			semitone = self.tuning + 12.*numpy.log2(1./divisor)
+			kwargs["strings"].append(semitone)
+
+		if "method" in kwargs:
+			if not kwargs["method"] in ["gradient","cumulate"]:
+				raise ValueError, "invalid method for Undertones"
+
+		FretboardBase.__init__(self, control, volume, **kwargs)
+
+	def construct(self, posx, posy):
+		# captions
+		fretcaptions = goocanvas.Group(parent=self)
+		for fret in xrange(1,self.frets+1):
+			goocanvas.Text(parent=fretcaptions, x=fret*self.rectwidth, y=0, text=str(fret), anchor=gtk.ANCHOR_NORTH, font=10)
+
+		stringcaptions = goocanvas.Group(parent=self)
+		goocanvas.Text(parent=stringcaptions, x=0, y=0, text="f.", anchor=gtk.ANCHOR_EAST, font=10)
+		for undertone in xrange(1,self.undertones+1):
+			name = "-"+str(undertone)+"."
+			goocanvas.Text(parent=stringcaptions, x=0, y=undertone*self.rectheight, text=name, anchor=gtk.ANCHOR_EAST, font=10)
+
+		startx = posx + stringcaptions.get_bounds().x2-stringcaptions.get_bounds().x1 + 5
+		starty = posy + fretcaptions.get_bounds().y2-fretcaptions.get_bounds().y1
+
+		fretcaptions.props.x = startx + 0.5*self.rectwidth
+		fretcaptions.props.y = posy
+
+		stringcaptions.props.x = startx - 5
+		stringcaptions.props.y = starty + 0.5*self.rectheight
+
+		# fretboard
+		FretboardBase.construct(self, startx, starty)
+
+		# analyze
+#		y = self.get_bounds().y2 + 10
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="inharmonicity", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="lower_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="upper_dependence", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="cumulate", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+#
+#		y += self.rectheight
+#		for fret in xrange(0,self.frets+1):
+#			x = startx + self.rectwidth*fret
+#			rect = Semitone(self.control, semitone=self.tuning+fret, method="test", parent=self, x=x, y=y, width=self.rectwidth, height=self.rectheight)
+
+	# callbacks
+	def open_context_menu(self, rect, event, string, fret):
+		semitone = self.tuning + fret
+
+		menu = gtk.Menu()
+
+		item = gtk.MenuItem("Overtones")
+		item.connect("activate", self.open_overtones, item, None, self.strings[string])
+		menu.append(item)
+
+		item = gtk.MenuItem("Undertones")
+		item.connect("activate", self.open_undertones, item, None, self.strings[string])
+		menu.append(item)
 
 		item = gtk.MenuItem("Analyze")
 		item.connect("activate", self.analyze_semitone, item, None, self.tuning+fret)
@@ -467,13 +591,24 @@ class FretboardWindow(FretboardWindowBase):
 #		combobox.append_text(str(i+1)+" ("+str(string.tuning)+")")
 		combobox.set_active(0)
 
-class SingleStringWindow(FretboardWindowBase):
+class OvertoneWindow(FretboardWindowBase):
 	def __init__(self, control, tuning=-5, **kwargs):
 		FretboardWindowBase.__init__(self, **kwargs)
 
-		self.set_title("SingleString "+Math.note_name(tuning)+" ("+str(tuning)+")")
+		self.set_title("Overtones of %s-tuned string (%f - %f Hz)" % (Math.note_name(tuning), tuning, Math.semitone_to_frequency(tuning)))
 
 		root = self.canvas.get_root_item()
-		self.visualizer = SingleString(control, self.volume, parent=root, tuning=tuning)
+		self.visualizer = Overtones(control, self.volume, parent=root, tuning=tuning)
+
+		self.adjust_canvas_size()
+
+class UndertoneWindow(FretboardWindowBase):
+	def __init__(self, control, tuning=-5, **kwargs):
+		FretboardWindowBase.__init__(self, **kwargs)
+
+		self.set_title("Undertones of %s-tuned string (%f - %f Hz)" % (Math.note_name(tuning), tuning, Math.semitone_to_frequency(tuning)))
+
+		root = self.canvas.get_root_item()
+		self.visualizer = Undertones(control, self.volume, parent=root, tuning=tuning)
 
 		self.adjust_canvas_size()
