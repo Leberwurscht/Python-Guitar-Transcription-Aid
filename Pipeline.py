@@ -185,6 +185,66 @@ class AppSinkPipeline(gst.Pipeline):
 
 		return min_position, max_position
 
+class SineSrc(gst.BaseSrc):
+	__gstdetails__ = ('SineSrc', 'Source', 'Sine source', 'leberwurscht')
+	__gsttemplates__ = ( gst.PadTemplate("src", gst.PAD_SRC, gst.PAD_ALWAYS, gst.Caps("audio/x-raw-float, rate=44100, channels=1, width=32, endianness=1234")) )
+
+	def __init__(self):
+		gst.BaseSrc.__init__(self)
+		self.set_format(gst.FORMAT_TIME)
+		self.sine = Sinewave(440)
+
+	def do_create(self, offset, length):
+		self.debug("Pushing buffer")
+		gstBuf = gst.Buffer(self.sine(length))
+		caps = self.get_pad("src").get_caps()
+		gstBuf.set_caps(caps)
+		gstBuf.timestamp = int(self.sine.count / 44100. * gst.SECOND)
+		gstBuf.duration = int(length/44100. * gst.SECOND)
+		return gst.FLOW_OK, gstBuf
+
+gobject.type_register(SineSrc)
+gst.element_register(SineSrc, "sinesrc")
+
+class Sinewave:
+    def __init__(self, freq):
+        self.count = 0
+        self.freq = freq
+
+    def __call__(self, N):
+        t = numpy.arange(self.count, self.count + N)/44100.
+        self.count += N
+        data = numpy.sin(2*numpy.pi*self.freq*t)
+        bytes = data.astype(numpy.float32).tostring()
+        return bytes
+
+class AppSrcPipeline(gst.Pipeline):
+	def __init__(self):
+		gst.Pipeline.__init__(self)
+
+		# appsrc
+		appsrc = gst.element_factory_make("appsrc")
+		appsrc.connect("need-data", self.need_data)
+		self.add(appsrc)
+
+		# capsfilter
+		capsfilter = gst.element_factory_make("capsfilter")
+		self.caps = gst.caps_from_string('audio/x-raw-float, rate=44100, channels=1, width=32, endianness=1234')
+		capsfilter.set_property("caps", self.caps)
+		self.add(capsfilter)
+		appsrc.link(capsfilter)
+
+		# sink
+		sink = gst.element_factory_make("gconfaudiosink")
+		self.add(sink)
+		capsfilter.link(sink)
+
+	def need_data(self, src, length):
+		print "request of %d",length
+		bytes = self.sw(length)
+		src.emit('push-buffer', gst.Buffer(bytes))
+		return True
+
 class Pipeline(gst.Pipeline):
 	def __init__(self,filename=None, bands=4096):
 		gst.Pipeline.__init__(self)

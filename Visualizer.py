@@ -4,6 +4,7 @@ import gtk, numpy, cairo, goocanvas, gobject
 import gst
 import Math
 
+
 # == PLAN ==
 
 # class SemitoneBase(goocanvas.ItemSimple, goocanvas.Item)
