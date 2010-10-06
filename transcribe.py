@@ -20,7 +20,7 @@ gobject.threads_init()
 
 import sys
 
-import Project, Visualizer, Analyze, Timeline, Pipeline, Math
+import Project, Visualizer, Analyze, Timeline, Pipeline, Math, Equalizer
 import numpy
 
 class Transcribe:
@@ -333,6 +333,14 @@ class Transcribe:
 		w = Analyze.Analyze()
 		w.show_all()
 		w.plot_spectrum(frq, power)
+
+	def open_equalizer(self, widget):
+		if not self.project: return
+
+		x = Analyze.get_frq(2049, 44100)
+		y = numpy.zeros(len(x))
+		w = Equalizer.PlotEditable(x,y)
+		w.show_all()
 
 	# glade callbacks - toolbar
 	def set_default_mode(self,widget):

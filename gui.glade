@@ -156,6 +156,14 @@
                         <signal name="activate" handler="open_plot"/>
                       </object>
                     </child>
+                    <child>
+                      <object class="GtkMenuItem" id="menuitem5">
+                        <property name="visible">True</property>
+                        <property name="label" translatable="yes">Equalizer</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="open_equalizer"/>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
