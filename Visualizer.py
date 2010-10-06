@@ -559,6 +559,11 @@ class FretboardWindowBase(gtk.Window):
 		self.canvas.set_property("has-tooltip", True)
 		vbox.add(self.canvas)
 
+		self.connect("delete-event", self.stop_playing)
+
+	def stop_playing(self, *args):
+		self.visualizer.pipeline.set_state(gst.STATE_NULL)
+
 	def adjust_canvas_size(self):
 		width = self.visualizer.get_width()
 		height = self.visualizer.get_height()
