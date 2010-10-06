@@ -196,9 +196,7 @@ class Equalizer(gst.Element):
 		gst.log ("Passing buffer with ts %d" % (buffer.timestamp))
 
 		fft = numpy.frombuffer(buffer, numpy.complex128)
-		print len(fft), len(self.weights)
 		fft = fft * self.weights
-		print "done"
 		b = gst.Buffer(fft)
 		b.set_caps(self.srcpad.get_caps())
 		return self.srcpad.push(b)
