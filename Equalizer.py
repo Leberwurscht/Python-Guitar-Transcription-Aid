@@ -42,7 +42,7 @@ class PlotEditable(gtk.Window):
 		btn.connect("toggled", self.toggle_noise)
 		vbox.add(btn)
 
-		self.pipeline = gst.parse_launch("spectrum_noise0 ! spectrum_equalizer name=eq ! ifft ! audioconvert ! gconfaudiosink")
+		self.pipeline = gst.parse_launch("spectrum_noise ! spectrum_equalizer name=eq ! ifft ! audioconvert ! gconfaudiosink")
 
 	def toggle_noise(self, widget):
 		if widget.get_active():

@@ -4,29 +4,6 @@ import gobject
 gobject.threads_init()
 import gst, numpy
 
-class Noise0(gst.BaseSrc):
-	__gsttemplates__ = (
-		gst.PadTemplate("src",
-		gst.PAD_SRC,
-		gst.PAD_ALWAYS,
-		gst.Caps("audio/x-raw-spectrum"))
-	)
-	__gstdetails__ = ("spectrum_noise0", "Audio/Source", "src for noise spectrum with phase 0", "Leberwurscht")
-
-	def __init__(self):
-		self.__gobject_init__()
-		self.pad = self.get_pad("src")
-		self.pad.use_fixed_caps()
-
-	def do_create(self, offset, size):
-		fft = numpy.ones(2049, numpy.complex128)
-		b = gst.Buffer(fft)
-		b.set_caps(self.pad.get_caps())
-		return gst.FLOW_OK, b
-
-gobject.type_register(Noise0)
-gst.element_register(Noise0, "spectrum_noise0")
-
 class Noise(gst.BaseSrc):
 	__gsttemplates__ = (
 		gst.PadTemplate("src",
@@ -34,16 +11,17 @@ class Noise(gst.BaseSrc):
 		gst.PAD_ALWAYS,
 		gst.Caps("audio/x-raw-spectrum"))
 	)
-	__gstdetails__ = ("spectrum_noise", "Audio/Source", "src for noise spectrum with random phase", "Leberwurscht")
+	__gstdetails__ = ("spectrum_noise", "Audio/Source", "src for noise spectrum", "Leberwurscht")
 
 	def __init__(self):
 		self.__gobject_init__()
 		self.pad = self.get_pad("src")
 		self.pad.use_fixed_caps()
+		phase = numpy.random.random(2049)*2.*numpy.pi
+		self.spectrum = numpy.exp(phase*1j)
 
 	def do_create(self, offset, size):
-		fft = numpy.exp(numpy.random.random(2049)*2j*numpy.pi)
-		b = gst.Buffer(fft)
+		b = gst.Buffer(self.spectrum)
 		b.set_caps(self.pad.get_caps())
 		return gst.FLOW_OK, b
 
