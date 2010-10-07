@@ -5,10 +5,6 @@ import gtk, numpy, scipy.ndimage
 import matplotlib
 import matplotlib.backends.backend_gtkcairo as mpl_backend
 
-def get_frq(bands, rate):
-	frq = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
-	return frq
-
 def get_power(data):
 	# apply window
 	window = numpy.hanning(len(data))

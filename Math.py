@@ -42,3 +42,8 @@ def windowed_fft(data):
 	power = numpy.abs(numpy.fft.rfft(data))**2. / len(data)**2.
 
 	return power
+
+def get_frq(bands, rate):
+	""" get frequencies for a DFT with 'bands' bands and a rate of 'rate' """
+	frq = 0.5 * ( numpy.arange(bands) + 0.5 ) * rate / bands
+	return frq

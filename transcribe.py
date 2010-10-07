@@ -96,6 +96,8 @@ class Transcribe:
 		project.control.connect("plot_evolution", self.vis_plot_evolution)
 		project.control.connect("find_onset", self.find_onset)
 		project.control.connect("analyze_semitone", self.analyze_semitone)
+		project.control.connect("semitone-to-equalizer", self.semitone_to_equalizer)
+		project.control.connect("overtones-to-equalizer", self.overtones_to_equalizer)
 
 		self.project = project
 		self.set_autoupdate()
@@ -214,6 +216,34 @@ class Transcribe:
 		sw.add(tv)
 
 		w.show_all()
+
+	def semitone_to_equalizer(self, control, semitone):
+		self.overtones_to_equalizer(self, control, 0)
+
+	def overtones_to_equalizer(self, control, semitone, overtones=10):
+		if not self.project: return
+
+		x = self.project.pipeline.eq.frequencies
+		y = self.project.pipeline.eq.props.transmission
+
+		fundamental_frequency = Math.semitone_to_frequency(semitone)
+
+		for overtone in xrange(overtones+1):
+			frequency = fundamental_frequency*(overtone+1)
+			semitone = Math.frequency_to_semitone(frequency)
+
+			lower = Math.semitone_to_frequency(semitone-0.5)
+			upper = Math.semitone_to_frequency(semitone+0.5)
+
+			if lower > x[-1]: break
+
+			for i in xrange(len(x)):
+				if x[i]>upper: break
+
+				if lower<=x[i]:
+					y[i]=1.
+
+		self.project.pipeline.eq.props.transmission = y
 
 	# glade callbacks - file menu
 	def new_project(self,*args):
@@ -337,10 +367,7 @@ class Transcribe:
 	def open_equalizer(self, widget):
 		if not self.project: return
 
-		x = Analyze.get_frq(2049, 44100)
-#		y = numpy.ones(len(x))
-		y = self.project.pipeline.eq.props.weights
-		w = Equalizer.PlotEditable(x,y)
+		w = Equalizer.EqualizerWindow(self.project.pipeline.eq)
 		w.show_all()
 
 	# glade callbacks - toolbar

@@ -2,7 +2,9 @@
 
 import gobject
 gobject.threads_init()
-import gst, numpy
+import gst
+
+import Math, numpy
 
 class Noise(gst.BaseSrc):
 	__gsttemplates__ = (
@@ -51,7 +53,6 @@ class FFT(gst.Element):
 		self.sinkpad.set_event_function(self.eventfunc)
 		self.add_pad (self.sinkpad)
 		self.srcpad.set_event_function(self.srceventfunc)
-#		self.srcpad.set_query_function(self.srcqueryfunc)
 		self.add_pad (self.srcpad)
 
 		self.adapter = gst.Adapter()
@@ -79,9 +80,6 @@ class FFT(gst.Element):
 
 	def eventfunc(self, pad, event):
 		return self.srcpad.push_event(event)
-
-	def srcqueryfunc (self, pad, query):
-		return self.sinkpad.query(query)
 	def srceventfunc (self, pad, event):
 		return self.sinkpad.push_event(event)
 
@@ -109,7 +107,6 @@ class IFFT(gst.Element):
 		self.sinkpad.set_event_function(self.eventfunc)
 		self.add_pad (self.sinkpad)
 		self.srcpad.set_event_function(self.srceventfunc)
-#		self.srcpad.set_query_function(self.srcqueryfunc)
 		self.add_pad (self.srcpad)
 
 	def chainfunc(self, pad, buffer):
@@ -125,9 +122,6 @@ class IFFT(gst.Element):
 
 	def eventfunc(self, pad, event):
 		return self.srcpad.push_event(event)
-
-	def srcqueryfunc (self, pad, query):
-		return self.sinkpad.query(query)
 	def srceventfunc (self, pad, event):
 		return self.sinkpad.push_event(event)
 
@@ -145,15 +139,16 @@ class Equalizer(gst.Element):
 		gst.Caps("audio/x-raw-spectrum"))
 	__gstdetails__ = ("spectrum_equalizer", "Audio/Filter", "equalizer that deals with spectrum data", "Leberwurscht")
 
-	__gproperties__ = {"weights":(gobject.TYPE_PYOBJECT, "weights", "weights for each spectral band", gobject.PARAM_READWRITE)}
+	__gproperties__ = {"transmission":(gobject.TYPE_PYOBJECT, "transmission", "transmission for each spectral band", gobject.PARAM_READWRITE)}
 
 	def __init__(self, *args, **kwargs):
-		self.weights = None
+		self.frequencies = Math.get_frq(2049, 44100)
+		self.transmission = None
 
 		gst.Element.__init__(self, *args, **kwargs)
 
-		if not self.weights:
-			self.weights = numpy.ones(2049)
+		if not self.transmission:
+			self.transmission = numpy.ones(2049)
 
 		self.sinkpad = gst.Pad(self._sinkpadtemplate, "sink")
 		self.sinkpad.use_fixed_caps()
@@ -163,7 +158,6 @@ class Equalizer(gst.Element):
 		self.sinkpad.set_event_function(self.eventfunc)
 		self.add_pad (self.sinkpad)
 		self.srcpad.set_event_function(self.srceventfunc)
-#		self.srcpad.set_query_function(self.srcqueryfunc)
 		self.add_pad (self.srcpad)
 
 	# custom property
@@ -177,7 +171,7 @@ class Equalizer(gst.Element):
 		gst.log ("Passing buffer with ts %d" % (buffer.timestamp))
 
 		fft = numpy.frombuffer(buffer, numpy.complex128)
-		fft = fft * self.weights
+		fft = fft * self.transmission
 		b = gst.Buffer(fft)
 		b.set_caps(self.srcpad.get_caps())
 		b.timestamp = buffer.timestamp
@@ -185,9 +179,6 @@ class Equalizer(gst.Element):
 
 	def eventfunc(self, pad, event):
 		return self.srcpad.push_event(event)
-
-	def srcqueryfunc (self, pad, query):
-		return self.sinkpad.query(query)
 	def srceventfunc (self, pad, event):
 		return self.sinkpad.push_event(event)
 

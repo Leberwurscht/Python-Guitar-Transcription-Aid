@@ -252,6 +252,12 @@ class FretboardBase(goocanvas.Group):
 		w = UndertoneWindow(self.control, tuning)
 		w.show_all()
 
+	def semitone_to_equalizer(self, item, target, event, semitone):
+		self.control.emit("semitone-to-equalizer", semitone)
+
+	def overtones_to_equalizer(self, item, target, event, semitone):
+		self.control.emit("overtones-to-equalizer", semitone)
+
 	# custom properties
 	def do_get_property(self,pspec):
 		return getattr(self, pspec.name)
@@ -313,6 +319,14 @@ class Fretboard(FretboardBase):
 
 		item = gtk.MenuItem("Add to tabulature")
 		item.connect("activate", self.add_tab_marker, item, None, string, fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Set equalizer transmissive")
+		item.connect("activate", self.overtones_to_equalizer, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Set equalizer transmissive (only root)")
+		item.connect("activate", self.semitone_to_equalizer, item, None, self.strings[string]+fret)
 		menu.append(item)
 
 		menu.show_all()
@@ -417,6 +431,10 @@ class Overtones(FretboardBase):
 
 		item = gtk.MenuItem("Find onset")
 		item.connect("activate", self.find_onset, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Set equalizer transmissive")
+		item.connect("activate", self.semitone_to_equalizer, item, None, self.strings[string]+fret)
 		menu.append(item)
 
 #		item = gtk.MenuItem("Add to tabulature")
@@ -525,6 +543,10 @@ class Undertones(FretboardBase):
 
 		item = gtk.MenuItem("Find onset")
 		item.connect("activate", self.find_onset, item, None, self.strings[string]+fret)
+		menu.append(item)
+
+		item = gtk.MenuItem("Set equalizer transmissive")
+		item.connect("activate", self.semitone_to_equalizer, item, None, self.strings[string]+fret)
 		menu.append(item)
 
 #		item = gtk.MenuItem("Add to tabulature")

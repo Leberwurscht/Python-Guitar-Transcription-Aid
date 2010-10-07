@@ -1,44 +1,50 @@
 #!/usr/bin/env python
 
 import gtk
-import Elements
 
 import matplotlib
 import matplotlib.backends.backend_gtkcairo as mpl_backend
 
-import numpy
+import gst
+import Elements # we do not refer to classes contained in Elements directly, but we need to import this for gst.parse_launch to recognise the elements
 
-import gst, Elements
-
-class PlotEditable(gtk.Window):
-	def __init__(self, x, y):
+class EqualizerWindow(gtk.Window):
+	def __init__(self, equalizer_element):
 		gtk.Window.__init__(self)
 
-		self.x = x
-		self.y = y
+		# last mouse position must be saved when dragging - if mouse is moved fast,
+		# pixels are skipped so we need to interpolate
 		self.last_mouse_position = None
 
-		fig = matplotlib.figure.Figure(figsize=(5,4))
-		self.ax = fig.add_subplot(111)
+		# redraw when transmission function of equalizer is changed
+		self.equalizer_element = equalizer_element
+		equalizer_element.connect("notify::transmission", self.redraw)
 
+		# create vbox
 		vbox = gtk.VBox()
 		self.add(vbox)
 
+		# setup plot
+		fig = matplotlib.figure.Figure(figsize=(5,4))
+		self.ax = fig.add_subplot(111)
+
 		self.figure = mpl_backend.FigureCanvasGTK(fig)
 		self.figure.set_size_request(500,400)
-		self.navbar = mpl_backend.NavigationToolbar2Cairo(self.figure, self)
 		vbox.pack_start(self.figure)
-		vbox.pack_start(self.navbar, False, False)
 
-		self.line, = self.ax.plot(self.x, self.y)
+		self.line, = self.ax.plot(equalizer_element.frequencies, equalizer_element.props.transmission)
 		self.ax.set_ylim(-0.05,2)
 
+		# connect mouse callbacks
 		fig.canvas.mpl_connect('button_press_event', self.press)
 		fig.canvas.mpl_connect('motion_notify_event', self.motion)
 		fig.canvas.mpl_connect('button_release_event', self.release)
 
-		self.connect("delete-event", self.close)
+		# setup navbar
+		self.navbar = mpl_backend.NavigationToolbar2Cairo(self.figure, self)
+		vbox.pack_start(self.navbar, False, False)
 
+		# add buttons
 		btn = gtk.ToggleButton("Test with noise")
 		btn.connect("toggled", self.toggle_noise)
 		vbox.pack_start(btn, False, False)
@@ -51,13 +57,21 @@ class PlotEditable(gtk.Window):
 		btn.connect("clicked", self.set_constant, 0.)
 		vbox.pack_start(btn, False, False)
 
-		self.pipeline = gst.parse_launch("spectrum_noise ! spectrum_equalizer name=eq ! ifft ! audioconvert ! gconfaudiosink")
-		self.pipeline.get_by_name("eq").props.weights = self.y
+		# connect close callback
+		self.connect("delete-event", self.close)
 
-	def set_constant(self, widget, c):
-		self.y[:] = c
+		# setup gstreamer pipeline to test the equalizer with noise
+		self.pipeline = gst.parse_launch("spectrum_noise ! spectrum_equalizer name=eq ! ifft ! audioconvert ! gconfaudiosink")
+		self.pipeline.get_by_name("eq").props.transmission = self.equalizer_element.props.transmission
+
+	def redraw(self, *args):
 		self.line.recache()
 		self.line.figure.canvas.draw()
+
+	def set_constant(self, widget, c):
+		transmission = self.equalizer_element.props.transmission
+		transmission[:] = c
+		self.equalizer_element.props.transmission = transmission
 
 	def toggle_noise(self, widget):
 		if widget.get_active():
@@ -75,29 +89,32 @@ class PlotEditable(gtk.Window):
 		# exclude events from outside of the plotting rectangle
 		if not event.inaxes==self.ax: return
 
-		self.mouse_button_pressed = True
+		# get abscissa and ordinate
+		x = self.line.get_xdata()
+		y = self.line.get_ydata()
 
 		# get nearest x position
-		l = len(self.x)
+		l = len(x)
 
 		i = 0
-		while i<l and self.x[i] < event.xdata: i += 1
+		while i<l and x[i] < event.xdata: i += 1
 
-		assert (i==l and self.x[-1]<event.xdata) or (i==0 and event.xdata<=self.x[0]) or (self.x[i-1]<event.xdata and event.xdata<=self.x[i])
+		assert (i==l and x[-1]<event.xdata) or (i==0 and event.xdata<=x[0]) or (x[i-1]<event.xdata and event.xdata<=x[i])
 
 		if i==0:
 			nearest_index = i
 		elif i==l:
 			nearest_index = -1
-		elif abs(event.xdata-self.x[i])<abs(event.xdata-self.x[i-1]):
+		elif abs(event.xdata-x[i])<abs(event.xdata-x[i-1]):
 			nearest_index = i
 		else:
 			nearest_index = i-1
 
 		# adjust y value
-		self.y[nearest_index] = event.ydata
-		self.line.recache()
-		self.line.figure.canvas.draw()
+		y[nearest_index] = event.ydata
+
+		# transfer y to equalizer_element
+		self.equalizer_element.props.transmission = y
 
 		# save position
 		self.last_mouse_position = event.x, event.y
@@ -112,20 +129,24 @@ class PlotEditable(gtk.Window):
 		# exclude events from outside of the plotting rectangle
 		if not event.inaxes==self.ax: return
 
+		# get abscissa and ordinate
+		x = self.line.get_xdata()
+		y = self.line.get_ydata()
+
 		# event.xdata is passed, but we need tolerance also so we calculate min and max values manually
 		min_x = event.x - 0.5
 		max_x = event.x + 0.5
 
-		min_xdata,y = self.ax.transData.inverted().transform_point((min_x, 0))
-		max_xdata,y = self.ax.transData.inverted().transform_point((max_x, 0))
+		min_xdata,ydrop = self.ax.transData.inverted().transform_point((min_x, 0))
+		max_xdata,ydrop = self.ax.transData.inverted().transform_point((max_x, 0))
 
 		# same procedure for last mouse position
 		xlast, ylast = self.last_mouse_position
 		min_x = xlast - 0.5
 		max_x = xlast + 0.5
 
-		min_xlastdata,y = self.ax.transData.inverted().transform_point((min_x, 0))
-		max_xlastdata,y = self.ax.transData.inverted().transform_point((max_x, 0))
+		min_xlastdata,ydrop = self.ax.transData.inverted().transform_point((min_x, 0))
+		max_xlastdata,ydrop = self.ax.transData.inverted().transform_point((max_x, 0))
 
 		# get x range
 		if xlast<event.x:
@@ -148,15 +169,14 @@ class PlotEditable(gtk.Window):
 		const = ylastdata - slope*xlastdata
 
 		# adjust points
-		for i in xrange(len(self.x)):
-			if self.x[i]>max_x: break
+		for i in xrange(len(x)):
+			if x[i]>max_x: break
 
-			if min_x<=self.x[i]:
-				self.y[i] = slope*self.x[i] + const
+			if min_x<=x[i]:
+				y[i] = slope*x[i] + const
 
-		# redraw
-		self.line.recache()
-		self.line.figure.canvas.draw()
+		# transfer y to equalizer_element
+		self.equalizer_element.props.transmission = y
 
 		# save mouse position
 		self.last_mouse_position = event.x, event.y
