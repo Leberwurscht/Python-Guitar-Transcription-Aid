@@ -213,10 +213,39 @@ class Pipeline(gst.Pipeline):
 		self.add(self.spectrum)
 		scaletempo.link(self.spectrum)
 
+		# insert equalizer
+		a = gst.element_factory_make("audiorate")
+		self.add(a)
+		self.spectrum.link(a)
+
+		r = gst.element_factory_make("audioresample")
+		self.add(r)
+		a.link(r)
+
+		c = gst.element_factory_make("audioconvert")
+		self.add(c)
+		r.link(c)
+
+		fft = gst.element_factory_make("fft")
+		self.add(fft)
+		c.link(fft)
+
+		self.eq = gst.element_factory_make("spectrum_equalizer")
+		self.add(self.eq)
+		fft.link(self.eq)
+
+		ifft = gst.element_factory_make("ifft")
+		self.add(ifft)
+		self.eq.link(ifft)
+
+		c = gst.element_factory_make("audioconvert")
+		self.add(c)
+		ifft.link(c)
+
 		# sink
 		sink = gst.element_factory_make("gconfaudiosink")
 		self.add(sink)
-		self.spectrum.link(sink)
+		c.link(sink)
 
 		# set properties
 		self.set_bands(bands)

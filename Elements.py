@@ -51,7 +51,7 @@ class FFT(gst.Element):
 		self.sinkpad.set_event_function(self.eventfunc)
 		self.add_pad (self.sinkpad)
 		self.srcpad.set_event_function(self.srceventfunc)
-		self.srcpad.set_query_function(self.srcqueryfunc)
+#		self.srcpad.set_query_function(self.srcqueryfunc)
 		self.add_pad (self.srcpad)
 
 		self.adapter = gst.Adapter()
@@ -59,15 +59,18 @@ class FFT(gst.Element):
 	def chainfunc(self, pad, buffer):
 		# fixme: need to reset adapter when starting - see gstspectrum.c
 		self.adapter.push(buffer)
+		end_time = buffer.timestamp + buffer.duration
 		gst.log("Got buffer with ts %d and length %d" % (buffer.timestamp, len(buffer)))
 
 		l = 4096
 		bytes_num = l*8
 
 		while self.adapter.available() >= bytes_num:
+			time_till_end = int( self.adapter.available()/8. / 44100 * gst.SECOND )
 			data = numpy.frombuffer(self.adapter.peek(bytes_num))
 			fft = numpy.fft.rfft(data) # length of this array is l/2 + 1
 			b = gst.Buffer(fft)
+			b.timestamp = end_time - time_till_end
 			b.set_caps(self.srcpad.get_caps())
 			self.srcpad.push(b)
 			self.adapter.flush(bytes_num)
@@ -106,7 +109,7 @@ class IFFT(gst.Element):
 		self.sinkpad.set_event_function(self.eventfunc)
 		self.add_pad (self.sinkpad)
 		self.srcpad.set_event_function(self.srceventfunc)
-		self.srcpad.set_query_function(self.srcqueryfunc)
+#		self.srcpad.set_query_function(self.srcqueryfunc)
 		self.add_pad (self.srcpad)
 
 	def chainfunc(self, pad, buffer):
@@ -117,6 +120,7 @@ class IFFT(gst.Element):
 		data = numpy.fft.irfft(fft, l)
 		b = gst.Buffer(data)
 		b.set_caps(self.srcpad.get_caps())
+		b.timestamp = buffer.timestamp
 		return self.srcpad.push(b)
 
 	def eventfunc(self, pad, event):
@@ -149,8 +153,7 @@ class Equalizer(gst.Element):
 		gst.Element.__init__(self, *args, **kwargs)
 
 		if not self.weights:
-			self.weights = numpy.zeros(2049)
-			self.weights[:40] = 1.
+			self.weights = numpy.ones(2049)
 
 		self.sinkpad = gst.Pad(self._sinkpadtemplate, "sink")
 		self.sinkpad.use_fixed_caps()
@@ -160,7 +163,7 @@ class Equalizer(gst.Element):
 		self.sinkpad.set_event_function(self.eventfunc)
 		self.add_pad (self.sinkpad)
 		self.srcpad.set_event_function(self.srceventfunc)
-		self.srcpad.set_query_function(self.srcqueryfunc)
+#		self.srcpad.set_query_function(self.srcqueryfunc)
 		self.add_pad (self.srcpad)
 
 	# custom property
@@ -177,6 +180,7 @@ class Equalizer(gst.Element):
 		fft = fft * self.weights
 		b = gst.Buffer(fft)
 		b.set_caps(self.srcpad.get_caps())
+		b.timestamp = buffer.timestamp
 		return self.srcpad.push(b)
 
 	def eventfunc(self, pad, event):
