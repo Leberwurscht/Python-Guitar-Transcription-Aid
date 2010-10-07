@@ -41,15 +41,15 @@ class PlotEditable(gtk.Window):
 
 		btn = gtk.ToggleButton("Test with noise")
 		btn.connect("toggled", self.toggle_noise)
-		vbox.add(btn)
+		vbox.pack_start(btn, False, False)
 
 		btn = gtk.Button("Reset")
 		btn.connect("clicked", self.set_constant, 1.)
-		vbox.add(btn)
+		vbox.pack_start(btn, False, False)
 
 		btn = gtk.Button("Set to zero")
 		btn.connect("clicked", self.set_constant, 0.)
-		vbox.add(btn)
+		vbox.pack_start(btn, False, False)
 
 		self.pipeline = gst.parse_launch("spectrum_noise ! spectrum_equalizer name=eq ! ifft ! audioconvert ! gconfaudiosink")
 		self.pipeline.get_by_name("eq").props.weights = self.y
