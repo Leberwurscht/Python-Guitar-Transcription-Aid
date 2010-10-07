@@ -338,7 +338,7 @@ class Transcribe:
 		if not self.project: return
 
 		x = Analyze.get_frq(2049, 44100)
-		y = numpy.zeros(len(x))
+		y = numpy.ones(len(x))
 		w = Equalizer.PlotEditable(x,y)
 		w.show_all()
 
